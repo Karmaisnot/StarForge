@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { TaskService } from './task.service';
-import { CreateTaskSchema, SetTaskStateSchema } from './task.schemas';
+import { CreateTaskSchema, MoveTaskSchema, SetTaskStateSchema } from './task.schemas';
 
 /** Task board routes. All require authentication. */
 export function taskRoutes(service: TaskService) {
@@ -23,6 +23,12 @@ export function taskRoutes(service: TaskService) {
       const { id } = req.params as { id: string };
       const { state } = SetTaskStateSchema.parse(req.body);
       return service.setState(req.auth, id, state);
+    });
+
+    app.patch('/tasks/:id/move', auth, (req) => {
+      const { id } = req.params as { id: string };
+      const input = MoveTaskSchema.parse(req.body);
+      return service.move(req.auth, id, input.state, input.targetIndex);
     });
   };
 }

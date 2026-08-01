@@ -2,7 +2,11 @@ import { Prisma } from '@prisma/client';
 import type { Db } from '../../db/prisma';
 
 export type TeacherWithRelations = Prisma.TeacherGetPayload<{
-  include: { branch: true; subjects: { include: { subject: true } } };
+  include: {
+    branch: true;
+    preferences: true;
+    subjects: { include: { subject: true } };
+  };
 }>;
 
 export interface TeacherSummary {
@@ -35,6 +39,7 @@ export class AccountRepository {
       where: { id: teacherId, academyId },
       include: {
         branch: true,
+        preferences: true,
         subjects: { include: { subject: true }, orderBy: { position: 'asc' } },
       },
     });

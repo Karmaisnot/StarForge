@@ -31,6 +31,17 @@ export interface AttendanceRows {
   entries: Array<{ studentId: string; present: boolean }>;
 }
 
+export interface AdvanceCohortRows {
+  cohortId: string;
+  advancedById: string;
+  mode: 'level' | 'month';
+  fromValue: Prisma.InputJsonValue;
+  toValue: Prisma.InputJsonValue;
+  readiness: number;
+  nextMonth?: number;
+  nextLevel?: Prisma.InputJsonValue;
+}
+
 /**
  * Cohort + roster data access. Derived metrics (student counts, up/down cards,
  * attendance %) are produced with set-based groupBy aggregates — never per-row
@@ -41,13 +52,22 @@ export class CohortRepository {
 
   listForTeacher(academyId: string, teacherId: string) {
     return this.db.cohort.findMany({
-      where: { academyId, teacherId },
+      where: {
+        academyId,
+        OR: [{ teacherId }, { instructors: { some: { teacherId } } }],
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
 
   getById(id: string, academyId: string, teacherId: string) {
-    return this.db.cohort.findFirst({ where: { id, academyId, teacherId } });
+    return this.db.cohort.findFirst({
+      where: {
+        id,
+        academyId,
+        OR: [{ teacherId }, { instructors: { some: { teacherId } } }],
+      },
+    });
   }
 
   /** Insert a new cohort. Localized leaves are stored as `{uz,ru,en}` Json. */
@@ -115,6 +135,72 @@ export class CohortRepository {
     return this.db.student.findMany({
       where: { cohortId, academyId },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  getTeacher(teacherId: string, academyId: string) {
+    return this.db.teacher.findFirst({ where: { id: teacherId, academyId } });
+  }
+
+  listInstructors(cohortId: string) {
+    return this.db.cohortInstructor.findMany({
+      where: { cohortId },
+      include: { teacher: true },
+      orderBy: [{ position: 'asc' }, { assignedAt: 'asc' }],
+    });
+  }
+
+  listLessons(cohortId: string, from?: string, to?: string) {
+    const startsAt = {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+    };
+    return this.db.cohortLesson.findMany({
+      where: {
+        cohortId,
+        status: { not: 'cancelled' },
+        ...(Object.keys(startsAt).length ? { startsAt } : {}),
+      },
+      include: { teacher: true, homework: true },
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+
+  listAttendanceHistory(cohortId: string, from?: string, to?: string) {
+    const takenAt = {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+    };
+    return this.db.attendanceRecord.findMany({
+      where: { cohortId, ...(Object.keys(takenAt).length ? { takenAt } : {}) },
+      include: { entries: true },
+      orderBy: { takenAt: 'asc' },
+    });
+  }
+
+  latestProgression(cohortId: string) {
+    return this.db.cohortProgression.findFirst({
+      where: { cohortId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  advanceCohort(rows: AdvanceCohortRows) {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.cohort.update({
+        where: { id: rows.cohortId },
+        data: rows.mode === 'month' ? { currentMonth: rows.nextMonth } : { level: rows.nextLevel },
+      });
+      return tx.cohortProgression.create({
+        data: {
+          cohortId: rows.cohortId,
+          advancedById: rows.advancedById,
+          mode: rows.mode,
+          fromValue: rows.fromValue,
+          toValue: rows.toValue,
+          readiness: rows.readiness,
+        },
+      });
     });
   }
 

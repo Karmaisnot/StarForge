@@ -9,7 +9,14 @@ export class SurveyService {
   getHistory() {
     return this.surveyRepo.listHistory();
   }
-  /** @param {string} surveyId @param {{rating:number,comment?:string}} input */
+  getDetail(surveyId) {
+    return this.surveyRepo.getDetail(surveyId);
+  }
+  /** @param {string} surveyId @param {{answers:Record<string,unknown>,progress:number}} input */
+  saveDraft(surveyId, input) {
+    return this.surveyRepo.saveDraft(surveyId, input);
+  }
+  /** @param {string} surveyId @param {object} input */
   submit(surveyId, input) {
     return this.surveyRepo.submit(surveyId, input);
   }

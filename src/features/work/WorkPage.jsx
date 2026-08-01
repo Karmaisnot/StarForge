@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { Button, Chip, Icon, Modal } from '@/ui';
+import { Button, Chip, Icon, Modal, MotivationalHero } from '@/ui';
 import { useAsync } from '@/hooks/useAsync.js';
 import { useServices } from '@/hooks/useServices.js';
 import { useT } from '@/hooks/useT.js';
@@ -63,33 +63,25 @@ export function WorkPage() {
               }
             />
 
-            <section className={styles.hero}>
-              <div className={styles.heroCopy}>
-                <span className={styles.eyebrow}>
-                  <i /> {t('work.staffWorkspace')}
-                </span>
-                <h2>{next ? t('work.nextUp') : t('work.clearWeek')}</h2>
-                {next ? (
-                  <div className={styles.nextEvent}>
-                    <time className="sf-mono">{formatTime(next.startsAt, locale)}</time>
-                    <span />
-                    <div>
-                      <strong>{next.title}</strong>
-                      <small>{next.meta}</small>
-                    </div>
+            <MotivationalHero
+              context="work"
+              className={styles.motivationalHero}
+              eyebrow={t('work.staffWorkspace')}
+              title={next ? t('work.nextUp') : t('work.clearWeek')}
+              refreshKey={revision}
+              meta={!next ? t('work.clearWeekBody') : undefined}
+            >
+              {next && (
+                <div className={styles.nextEvent}>
+                  <time className="sf-mono">{formatTime(next.startsAt, locale)}</time>
+                  <span />
+                  <div>
+                    <strong>{next.title}</strong>
+                    <small>{next.meta}</small>
                   </div>
-                ) : (
-                  <p>{t('work.clearWeekBody')}</p>
-                )}
-              </div>
-              <div className={styles.heroOrbit} aria-hidden="true">
-                <span>
-                  <Icon name="cal" size={26} />
-                </span>
-                <i className={styles.orbitOne} />
-                <i className={styles.orbitTwo} />
-              </div>
-            </section>
+                </div>
+              )}
+            </MotivationalHero>
 
             <section className={styles.metrics} aria-label={t('work.summary')}>
               <Metric
@@ -97,20 +89,29 @@ export function WorkPage() {
                 value={data.lessons.length}
                 label={t('work.events')}
                 tone="primary"
+                onClick={() => setTab('calendar')}
               />
               <Metric
                 icon="doc"
                 value={openRequests}
                 label={t('work.openRequests')}
                 tone="accent"
+                onClick={() => setTab('requests')}
               />
               <Metric
                 icon="users"
                 value={pendingMeetings}
                 label={t('work.awaitingRsvp')}
                 tone="success"
+                onClick={() => setTab('meetings')}
               />
-              <Metric icon="refresh" value={openCovers} label={t('work.coverOpen')} tone="warn" />
+              <Metric
+                icon="refresh"
+                value={openCovers}
+                label={t('work.coverOpen')}
+                tone="warn"
+                onClick={() => setTab('meetings')}
+              />
             </section>
 
             <div className={styles.tabBar} role="tablist" aria-label={t('work.title')}>
@@ -191,9 +192,9 @@ export function WorkPage() {
   );
 }
 
-function Metric({ icon, value, label, tone }) {
+function Metric({ icon, value, label, tone, onClick }) {
   return (
-    <article className={styles.metric} data-tone={tone}>
+    <button type="button" className={styles.metric} data-tone={tone} onClick={onClick}>
       <span>
         <Icon name={icon} size={17} />
       </span>
@@ -201,7 +202,8 @@ function Metric({ icon, value, label, tone }) {
         <strong className="sf-mono">{value}</strong>
         <small>{label}</small>
       </div>
-    </article>
+      <Icon name="arrowR" size={13} />
+    </button>
   );
 }
 
@@ -249,42 +251,49 @@ function CalendarView({ data, locale, t, weekOffset, setWeekOffset }) {
           </button>
         </div>
       </header>
-      <div className={styles.weekGrid}>
-        {days.map((day) => {
-          const dayEvents = events
-            .filter((event) => sameDay(new Date(event.startsAt), day))
-            .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-          return (
-            <article
-              className={styles.day}
-              key={day.toISOString()}
-              data-today={sameDay(day, new Date()) ? '1' : '0'}
-            >
-              <header>
-                <span>{formatDayName(day, locale)}</span>
-                <strong>{day.getDate()}</strong>
-              </header>
-              <div className={styles.dayEvents}>
-                {dayEvents.map((event) => (
-                  <div
-                    className={styles.event}
-                    key={`${event.kind}-${event.id}`}
-                    style={{ '--event-color': event.color }}
-                  >
-                    <time className="sf-mono">{formatTime(event.startsAt, locale)}</time>
-                    <strong>{event.title}</strong>
-                    <small>{event.meta}</small>
-                    <Chip tone={event.kind === 'meeting' ? 'accent' : 'neutral'}>
-                      {t(`work.${event.kind}`)}
-                    </Chip>
-                  </div>
-                ))}
-                {!dayEvents.length && <span className={styles.freeSlot}>{t('work.noEvents')}</span>}
-              </div>
-            </article>
-          );
-        })}
+      <div className={styles.calendarViewport}>
+        <div className={styles.weekGrid}>
+          {days.map((day) => {
+            const dayEvents = events
+              .filter((event) => sameDay(new Date(event.startsAt), day))
+              .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+            return (
+              <article
+                className={styles.day}
+                key={day.toISOString()}
+                data-today={sameDay(day, new Date()) ? '1' : '0'}
+              >
+                <header>
+                  <span>{formatDayName(day, locale)}</span>
+                  <strong>{day.getDate()}</strong>
+                </header>
+                <div className={styles.dayEvents}>
+                  {dayEvents.map((event) => (
+                    <div
+                      className={styles.event}
+                      key={`${event.kind}-${event.id}`}
+                      style={{ '--event-color': event.color }}
+                    >
+                      <time className="sf-mono">{formatTime(event.startsAt, locale)}</time>
+                      <strong>{event.title}</strong>
+                      <small>{event.meta}</small>
+                      <Chip tone={event.kind === 'meeting' ? 'accent' : 'neutral'}>
+                        {t(`work.${event.kind}`)}
+                      </Chip>
+                    </div>
+                  ))}
+                  {!dayEvents.length && (
+                    <span className={styles.freeSlot}>{t('work.noEvents')}</span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
+      <span className={styles.calendarScrollCue} aria-hidden="true">
+        <Icon name="arrowR" size={15} />
+      </span>
     </section>
   );
 }

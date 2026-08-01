@@ -15,6 +15,9 @@
     linear-gradient(126deg, #15213a 0%, #17213b 50%, #282154 100%);
   box-shadow: 0 18px 44px rgb(17 24 39 / 13%);
 }
+.motivationalHero {
+  margin-bottom: 14px;
+}
 .hero::after {
   position: absolute;
   right: -85px;
@@ -24,7 +27,9 @@
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 50%;
   content: '';
-  box-shadow: 0 0 0 44px rgb(255 255 255 / 3%), 0 0 0 88px rgb(255 255 255 / 2%);
+  box-shadow:
+    0 0 0 44px rgb(255 255 255 / 3%),
+    0 0 0 88px rgb(255 255 255 / 2%);
 }
 .heroCopy {
   position: relative;
@@ -74,7 +79,7 @@
 .nextLesson > span {
   width: 1px;
   height: 31px;
-  background: rgb(255 255 255 / 19%);
+  background: var(--sf-border-strong);
 }
 .nextLesson strong,
 .nextLesson small {
@@ -85,8 +90,8 @@
 }
 .nextLesson small {
   margin-top: 4px;
-  color: rgb(255 255 255 / 58%);
-  font-size: 8px;
+  color: var(--sf-muted);
+  font-size: 11px;
 }
 .heroStats {
   position: relative;
@@ -95,6 +100,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
   align-self: stretch;
+  width: min(380px, 38vw);
 }
 .heroStat {
   display: flex;
@@ -102,13 +108,13 @@
   justify-content: flex-end;
   min-width: 0;
   padding: 17px;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid var(--sf-hero-border);
   border-radius: 14px;
-  background: rgb(255 255 255 / 7%);
+  background: color-mix(in srgb, var(--sf-surface) 78%, transparent);
   backdrop-filter: blur(12px);
 }
 .heroStat[data-tone='warn'] {
-  background: rgb(251 146 60 / 12%);
+  background: var(--sf-warn-soft);
 }
 .heroStat strong {
   font-size: 22px;
@@ -117,8 +123,8 @@
 .heroStat span {
   margin-top: 7px;
   overflow: hidden;
-  color: rgb(255 255 255 / 55%);
-  font-size: 8px;
+  color: var(--sf-muted);
+  font-size: 10px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -165,6 +171,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
+}
+.overviewGrid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
 }
 .courseGrid {
   grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
@@ -720,6 +729,110 @@
   line-height: 1.5;
 }
 
+/* Student Insights is a primary workspace, so controls and evidence stay comfortably readable. */
+.insightWorkspace {
+  display: grid;
+  gap: 14px;
+}
+.insightFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) repeat(2, minmax(130px, 0.7fr)) auto;
+  gap: 9px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid var(--sf-border);
+  border-radius: 16px;
+  background: var(--sf-surface);
+  box-shadow: var(--sf-shadow-sm);
+}
+.insightFilters label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.insightFilters label > span {
+  overflow: hidden;
+  color: var(--sf-muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insightFilters select,
+.insightFilters input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  color: var(--sf-ink);
+  background: var(--sf-bg);
+  font: 600 11px var(--sf-font-ui);
+  color-scheme: light dark;
+}
+.resetFilters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.filterCount {
+  grid-column: 1 / -1;
+  color: var(--sf-muted);
+  font-size: 10px;
+}
+.panel > header span {
+  font-size: 9px;
+}
+.panel > header h2 {
+  font-size: 16px;
+}
+.lesson {
+  min-height: 72px;
+}
+.lessonDate span,
+.lessonCopy small,
+.attendanceList small,
+.recordTime time,
+.breakdownLegend span {
+  font-size: 9px;
+}
+.lessonCopy strong,
+.attendanceList strong {
+  font-size: 11px;
+}
+.status {
+  min-height: 24px;
+  padding: 0 9px;
+  font-size: 9px;
+}
+.riskIntro p {
+  font-size: 11px;
+}
+.riskList > article {
+  min-height: 94px;
+}
+.riskScore small {
+  font-size: 8px;
+}
+.riskList strong {
+  font-size: 12px;
+}
+.riskList small,
+.riskList p {
+  font-size: 9px;
+}
+
 @media (max-width: 1100px) {
   .hero {
     grid-template-columns: 1fr;
@@ -731,6 +844,9 @@
   .insightGrid,
   .resourceGrid {
     grid-template-columns: 1fr;
+  }
+  .insightFilters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (max-width: 820px) {
@@ -745,6 +861,9 @@
   .tabs button {
     padding: 0 7px;
   }
+  .insightFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 580px) {
   .hero {
@@ -753,6 +872,7 @@
   }
   .heroStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
   .heroStat {
     min-height: 76px;
@@ -784,6 +904,12 @@
   .gradeList article {
     grid-template-columns: minmax(105px, 1fr) 65px 22px 30px;
     gap: 6px;
+  }
+  .insightFilters {
+    grid-template-columns: 1fr;
+  }
+  .filterCount {
+    grid-column: 1;
   }
 }
 @media (max-width: 380px) {

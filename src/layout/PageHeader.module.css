@@ -14,6 +14,7 @@
   text-transform: uppercase;
   color: var(--sf-muted);
   margin-bottom: 8px;
+  text-wrap: balance;
 }
 .title {
   margin: 0;

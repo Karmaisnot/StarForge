@@ -22,3 +22,9 @@ export const IssueCardSchema = z
     message: 'Provide { cardTypeId, studentId } or { typeName, recipient }',
   });
 export type IssueCardInput = z.infer<typeof IssueCardSchema>;
+
+/** Security-desk barcode / student-code scan. */
+export const ScanCardSchema = z.object({
+  code: z.string().trim().min(1).max(160),
+});
+export type ScanCardInput = z.infer<typeof ScanCardSchema>;

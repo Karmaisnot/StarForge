@@ -21,12 +21,20 @@ export const SetTaskStateSchema = z.object({
 });
 export type SetTaskStateInput = z.infer<typeof SetTaskStateSchema>;
 
+/** PATCH /tasks/:id/move — reorder inside a column or move across columns. */
+export const MoveTaskSchema = z.object({
+  state: z.enum(stateValues),
+  targetIndex: z.number().int().min(0).max(10_000),
+});
+export type MoveTaskInput = z.infer<typeof MoveTaskSchema>;
+
 /** POST /tasks — create a task owned by the caller (so `mine` is true). */
 export const CreateTaskSchema = z.object({
   title: TitleSchema,
   priority: z.enum(priorityValues).optional(),
   projectId: z.string().trim().min(1).optional(),
   deadlineLabel: z.union([z.string().trim().min(1).max(120), LocalizedString]).optional(),
+  deadlineAt: z.string().datetime().optional(),
   urgent: z.boolean().optional(),
   fromMgmt: z.boolean().optional(),
 });

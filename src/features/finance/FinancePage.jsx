@@ -156,8 +156,10 @@ export function FinancePage() {
                           <small>{invoice.cohort}</small>
                         </div>
                         <strong>{invoice.student}</strong>
-                        <span>{date(invoice.dueDate, locale)}</span>
-                        <div className={styles.balance}>
+                        <span className={styles.due} data-label={t('finance.due')}>
+                          {date(invoice.dueDate, locale)}
+                        </span>
+                        <div className={styles.balance} data-label={t('finance.balance')}>
                           <strong className="sf-mono">{money(balance, locale)}</strong>
                           <i>
                             <b

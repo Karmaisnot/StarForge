@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { Db } from '../../db/prisma';
 
 /**
@@ -59,6 +60,58 @@ export class SurveyRepository {
     return this.db.survey.findFirst({ where: { id, academyId } });
   }
 
+  getSurveyDetail(id: string, academyId: string) {
+    return this.db.survey.findFirst({
+      where: { id, academyId },
+      include: { questionItems: { orderBy: { position: 'asc' } } },
+    });
+  }
+
+  getResponse(surveyId: string, teacherId: string) {
+    return this.db.surveyResponse.findUnique({
+      where: { surveyId_teacherId: { surveyId, teacherId } },
+    });
+  }
+
+  async upsertDraft(
+    surveyId: string,
+    teacherId: string,
+    data: { answers: Record<string, unknown>; progress: number },
+  ) {
+    const where = { surveyId_teacherId: { surveyId, teacherId } };
+    const existing = await this.db.surveyResponse.findUnique({ where });
+    if (existing) {
+      if (existing.status !== 'draft') return existing;
+      await this.db.surveyResponse.updateMany({
+        where: { id: existing.id, status: 'draft' },
+        data: {
+          answers: data.answers as Prisma.InputJsonValue,
+          progress: data.progress,
+        },
+      });
+      return this.db.surveyResponse.findUniqueOrThrow({ where });
+    }
+
+    try {
+      return await this.db.surveyResponse.create({
+        data: {
+          surveyId,
+          teacherId,
+          status: 'draft',
+          answers: data.answers as Prisma.InputJsonValue,
+          progress: data.progress,
+        },
+      });
+    } catch (error) {
+      // A concurrent final submission may win the unique-key race. Never turn
+      // that final response back into a draft.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+      return this.db.surveyResponse.findUniqueOrThrow({ where });
+    }
+  }
+
   /**
    * Idempotently finalise this teacher's response to a survey. The unique
    * (surveyId, teacherId) pair guarantees a re-submit/re-skip updates the same
@@ -68,13 +121,30 @@ export class SurveyRepository {
   upsertResponse(
     surveyId: string,
     teacherId: string,
-    data: { status: 'submitted' | 'skipped'; rating: number | null; comment: string | null },
+    data: {
+      status: 'submitted' | 'skipped';
+      rating: number | null;
+      comment: string | null;
+      answers?: Record<string, unknown>;
+    },
   ) {
     const now = new Date();
     return this.db.surveyResponse.upsert({
       where: { surveyId_teacherId: { surveyId, teacherId } },
-      create: { surveyId, teacherId, ...data, submittedAt: now },
-      update: { ...data, submittedAt: now },
+      create: {
+        surveyId,
+        teacherId,
+        ...data,
+        answers: (data.answers ?? {}) as Prisma.InputJsonValue,
+        progress: data.status === 'submitted' ? 100 : 0,
+        submittedAt: now,
+      },
+      update: {
+        ...data,
+        answers: (data.answers ?? {}) as Prisma.InputJsonValue,
+        progress: data.status === 'submitted' ? 100 : 0,
+        submittedAt: now,
+      },
     });
   }
 }

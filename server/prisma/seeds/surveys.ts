@@ -2,6 +2,125 @@ import { PrismaClient } from '@prisma/client';
 import { loc } from '../../src/shared/locale';
 import { SurveyResponseStatus } from '../../src/domain/enums';
 
+type QuestionSeed = {
+  kind: 'rating' | 'single' | 'multi' | 'boolean' | 'text' | 'longText';
+  prompt: string;
+  required?: boolean;
+  description?: string;
+  options?: Array<{ value: string; label: string }>;
+};
+
+const localized = (value: string) => loc(value, value, value);
+const option = (value: string, label: string) => ({ value, label });
+
+function buildQuestions(prefix: string, questions: QuestionSeed[]) {
+  return questions.map((question, position) => ({
+    id: `${prefix}-q${position + 1}`,
+    kind: question.kind,
+    prompt: localized(question.prompt),
+    ...(question.description ? { description: localized(question.description) } : {}),
+    ...(question.options
+      ? {
+          options: question.options.map((item) => ({
+            value: item.value,
+            label: localized(item.label),
+          })),
+        }
+      : {}),
+    required: question.required ?? false,
+    position,
+  }));
+}
+
+const satisfactionQuestions = buildQuestions('survey-satisfaction', [
+  {
+    kind: 'rating',
+    prompt: 'Rate your work experience this month.',
+    description: '1 is very difficult, 5 is excellent.',
+    required: true,
+  },
+  {
+    kind: 'single',
+    prompt: 'How is your current workload?',
+    required: true,
+    options: [option('light', 'Light'), option('balanced', 'Balanced'), option('heavy', 'Heavy')],
+  },
+  { kind: 'rating', prompt: 'How manageable is your schedule?', required: true },
+  {
+    kind: 'boolean',
+    prompt: 'Are you receiving enough support from management?',
+    required: true,
+  },
+  {
+    kind: 'multi',
+    prompt: 'Which resources do you need more of?',
+    options: [
+      option('materials', 'Lesson materials'),
+      option('planning', 'Planning time'),
+      option('technology', 'Technology'),
+      option('support', 'Methodical support'),
+    ],
+  },
+  { kind: 'longText', prompt: 'What was your biggest obstacle this month?' },
+  {
+    kind: 'single',
+    prompt: 'How is communication within the team?',
+    required: true,
+    options: [
+      option('clear', 'Clear'),
+      option('mixed', 'Mixed'),
+      option('poor', 'Needs improvement'),
+    ],
+  },
+  { kind: 'rating', prompt: 'Rate the tools available to you.', required: true },
+  { kind: 'text', prompt: 'Suggest one quick improvement.' },
+  {
+    kind: 'boolean',
+    prompt: 'Would you recommend working in this team next month?',
+    required: true,
+  },
+  {
+    kind: 'multi',
+    prompt: 'Which development topics interest you?',
+    options: [
+      option('ai', 'AI'),
+      option('classroom', 'Classroom management'),
+      option('assessment', 'Assessment'),
+      option('leadership', 'Leadership'),
+    ],
+  },
+  { kind: 'longText', prompt: 'What else should management know?' },
+]);
+
+const cardSystemQuestions = buildQuestions('survey-cards', [
+  { kind: 'rating', prompt: 'How clear is the card system?', required: true },
+  { kind: 'boolean', prompt: 'Do cards motivate students?', required: true },
+  {
+    kind: 'multi',
+    prompt: 'Which parts need improvement?',
+    options: [
+      option('rules', 'Rules'),
+      option('types', 'Card types'),
+      option('reporting', 'Reporting'),
+      option('parents', 'Parent communication'),
+    ],
+  },
+  {
+    kind: 'single',
+    prompt: 'How often do you use cards?',
+    required: true,
+    options: [option('daily', 'Daily'), option('weekly', 'Weekly'), option('rarely', 'Rarely')],
+  },
+  { kind: 'rating', prompt: 'Rate the mobile experience.', required: true },
+  { kind: 'text', prompt: 'What new card type is missing?' },
+  {
+    kind: 'boolean',
+    prompt: 'Do students understand why a card was issued?',
+    required: true,
+  },
+  { kind: 'longText', prompt: 'Any other suggestions or objections.' },
+]);
+
 /**
  * Seed surveys for the demo tenant + the demo teacher's responses.
  *
@@ -36,11 +155,12 @@ export async function seedSurveys(db: PrismaClient): Promise<void> {
         'Monthly teacher satisfaction',
       ),
       issuer: loc('Karimova R. · Direktor', 'Каримова Р. · Директор', 'Karimova R. · Director'),
-      questions: 12,
+      questions: satisfactionQuestions.length,
       estimateLabel: loc('~4 daq', '~4 мин', '~4 min'),
       deadlineAt: hours(2 * 24 + 14), // ~2 kun 14 soat
       urgent: true,
       anonymous: false,
+      questionItems: { create: satisfactionQuestions },
     },
   });
   // A draft response keeps sv1 active (not final) while carrying progress 33.
@@ -50,6 +170,12 @@ export async function seedSurveys(db: PrismaClient): Promise<void> {
       teacherId: teacher.id,
       status: 'draft',
       progress: 33,
+      answers: {
+        'survey-satisfaction-q1': 4,
+        'survey-satisfaction-q2': 'balanced',
+        'survey-satisfaction-q3': 4,
+        'survey-satisfaction-q4': 'yes',
+      },
     },
   });
 
@@ -62,12 +188,17 @@ export async function seedSurveys(db: PrismaClient): Promise<void> {
         'Система карт · предложения и замечания',
         'Card system · suggestions and objections',
       ),
-      issuer: loc('Ahmedov B. · O‘quv ishlari', 'Ахмедов Б. · Учебная часть', 'Ahmedov B. · Academic affairs'),
-      questions: 8,
+      issuer: loc(
+        'Ahmedov B. · O‘quv ishlari',
+        'Ахмедов Б. · Учебная часть',
+        'Ahmedov B. · Academic affairs',
+      ),
+      questions: cardSystemQuestions.length,
       estimateLabel: loc('~3 daq', '~3 мин', '~3 min'),
       deadlineAt: hours(6 * 24), // ~6 kun
       urgent: false,
       anonymous: false,
+      questionItems: { create: cardSystemQuestions },
     },
   });
 

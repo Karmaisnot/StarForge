@@ -48,6 +48,13 @@ export class TaskService {
     return mapTask(task, task.ownerId === ctx.teacherId);
   }
 
+  /** Reorder both affected columns in one database transaction. */
+  async move(ctx: AuthContext, id: string, state: string, targetIndex: number) {
+    const task = await this.repo.move(id, ctx.academyId, state, targetIndex);
+    if (!task) throw new NotFoundError('Task');
+    return mapTask(task, task.ownerId === ctx.teacherId);
+  }
+
   /**
    * Create a task owned by the caller (so `mine` is true) in the `todo` column.
    * `assigner` is the caller's own name; `projectId`, when given, is validated to
@@ -72,6 +79,7 @@ export class TaskService {
       priority: input.priority ?? null,
       projectId,
       deadlineLabel: input.deadlineLabel ?? null,
+      deadlineAt: input.deadlineAt ? new Date(input.deadlineAt) : null,
       urgent: input.urgent ?? false,
       fromMgmt: input.fromMgmt ?? false,
     });

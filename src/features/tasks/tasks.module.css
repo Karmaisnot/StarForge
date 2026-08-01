@@ -25,15 +25,30 @@
   }
 }
 @media (max-width: 600px) {
+  .filterStrip {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .filterStrip > span {
+    display: none;
+  }
   .kanban {
     grid-template-columns: 1fr;
   }
 }
 .kanbanCol {
-  background: var(--sf-surface-2);
+  background: color-mix(in srgb, var(--sf-surface-2) 72%, transparent);
+  border: 1px solid var(--sf-border);
   border-radius: 14px;
   padding: 12px;
   min-height: 200px;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+.kanbanCol[data-over='1'] {
+  border-color: var(--sf-primary);
+  background: var(--sf-primary-soft);
 }
 .kanbanHead {
   display: flex;
@@ -92,7 +107,12 @@
   transition:
     transform 0.1s,
     box-shadow 0.15s;
-  cursor: pointer;
+  cursor: default;
+  touch-action: manipulation;
+}
+.taskCard[data-dragging='1'] {
+  opacity: 0.28;
+  box-shadow: none;
 }
 .taskCard:hover {
   transform: translateY(-1px);
@@ -111,6 +131,41 @@
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
+}
+.dragHandle,
+.advanceTask {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--sf-muted);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+.dragHandle svg {
+  transform: rotate(90deg);
+}
+.dragHandle:hover,
+.dragHandle:focus-visible,
+.advanceTask:hover {
+  color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+}
+.dragHandle:active {
+  cursor: grabbing;
+}
+.advanceTask {
+  cursor: pointer;
+}
+.dragOverlay {
+  width: 280px;
+  transform: rotate(1.5deg);
+  filter: drop-shadow(var(--sf-shadow-lg));
 }
 .taskCardT {
   margin-top: 8px;
@@ -186,26 +241,154 @@
   justify-content: center;
 }
 
-
 /* New-task modal form */
-.form { display: flex; flex-direction: column; gap: 14px; }
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field > span { font-size: 12px; font-weight: 600; color: var(--sf-ink-2); }
-.inputCtl { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--sf-border); background: var(--sf-bg); font-family: inherit; font-size: 14px; color: var(--sf-ink); outline: none; }
-.inputCtl:focus { border-color: var(--sf-primary); }
-
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sf-ink-2);
+}
+.inputCtl {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sf-border);
+  background: var(--sf-bg);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--sf-ink);
+  outline: none;
+}
+.inputCtl:focus {
+  border-color: var(--sf-primary);
+}
 
 /* Calendar view */
-.calHead { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--sf-border); }
-.calMonth { font-size: 15px; font-weight: 700; text-transform: capitalize; min-width: 170px; text-align: center; }
-.calWeekdays { display: grid; grid-template-columns: repeat(7, 1fr); padding: 8px 8px 0; }
-.calWeekdays > div { text-align: center; font-size: 11px; font-weight: 600; color: var(--sf-muted); padding: 4px 0; }
-.calGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 8px; }
-.calCell { min-height: 92px; border: 1px solid var(--sf-border); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; background: var(--sf-surface); }
-.calEmpty { background: transparent; border-color: transparent; }
-.calDay { font-size: 12px; font-weight: 700; color: var(--sf-ink-2); }
-.calTask { display: flex; gap: 4px; align-items: center; width: 100%; text-align: left; font-size: 11px; line-height: 1.25; padding: 4px 6px; border: none; border-left: 3px solid var(--sf-primary); border-radius: 6px; background: var(--sf-surface-2); cursor: pointer; color: var(--sf-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.calTask:hover { background: var(--sf-surface-3); }
-.calUnsched { padding: 12px 16px; border-top: 1px solid var(--sf-border); }
-.calUnschedHead { font-size: 12px; font-weight: 700; color: var(--sf-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
-.calUnschedList { display: flex; flex-direction: column; gap: 6px; }
+.calHead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--sf-border);
+}
+.calMotivation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  color: var(--sf-accent-ink);
+  background: var(--sf-accent-soft);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+}
+.calMonth {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: capitalize;
+  min-width: 170px;
+  text-align: center;
+}
+.calWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 8px 8px 0;
+}
+.calWeekdays > div {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sf-muted);
+  padding: 4px 0;
+}
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  padding: 8px;
+}
+.calCell {
+  min-height: 92px;
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--sf-surface);
+}
+.calEmpty {
+  background: transparent;
+  border-color: transparent;
+}
+.calDay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sf-ink-2);
+}
+.calDay small {
+  overflow: hidden;
+  color: var(--sf-accent-ink);
+  font-size: 7px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calHoliday {
+  border-color: var(--sf-accent);
+  background: color-mix(in srgb, var(--sf-accent-soft) 62%, var(--sf-surface));
+  box-shadow: inset 0 3px 0 var(--sf-accent);
+}
+.calTask {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 4px 6px;
+  border: none;
+  border-left: 3px solid var(--sf-primary);
+  border-radius: 6px;
+  background: var(--sf-surface-2);
+  cursor: pointer;
+  color: var(--sf-ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.calTask:hover {
+  background: var(--sf-surface-3);
+}
+.calUnsched {
+  padding: 12px 16px;
+  border-top: 1px solid var(--sf-border);
+}
+.calUnschedHead {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sf-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.calUnschedList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

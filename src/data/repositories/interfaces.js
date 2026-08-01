@@ -47,6 +47,10 @@ export class ICohortRepository {
   getRoster(_cohortId) {
     return ni('ICohortRepository.getRoster');
   }
+  /** @param {string} _cohortId @param {{from?:string,to?:string}} _filters */
+  getWorkspace(_cohortId, _filters) {
+    return ni('ICohortRepository.getWorkspace');
+  }
   /** @param {object} _draft @returns {Promise<object>} */
   create(_draft) {
     return ni('ICohortRepository.create');
@@ -54,6 +58,10 @@ export class ICohortRepository {
   /** @param {string} _cohortId @param {Array<{studentId:string,present:boolean}>} _entries */
   saveAttendance(_cohortId, _entries) {
     return ni('ICohortRepository.saveAttendance');
+  }
+  /** @param {string} _cohortId */
+  advance(_cohortId) {
+    return ni('ICohortRepository.advance');
   }
 }
 
@@ -91,6 +99,10 @@ export class ITaskRepository {
   setState(_id, _state) {
     return ni('ITaskRepository.setState');
   }
+  /** @param {string|number} _id @param {string} _state @param {number} _targetIndex */
+  move(_id, _state, _targetIndex) {
+    return ni('ITaskRepository.move');
+  }
   /** @param {object} _draft @returns {Promise<object>} created task */
   create(_draft) {
     return ni('ITaskRepository.create');
@@ -98,7 +110,7 @@ export class ITaskRepository {
 }
 
 export class IDashboardRepository {
-  getToday() {
+  getToday(_range = '7d') {
     return ni('IDashboardRepository.getToday');
   }
 }
@@ -133,7 +145,7 @@ export class IPrintRepository {
   getLibrary() {
     return ni('IPrintRepository.getLibrary');
   }
-  /** @param {object} _input {printerId,doc,copies?,size?} @returns {Promise<object>} created job */
+  /** @param {object} _input {printerId,doc,copies?,size?,libraryFileId?} @returns {Promise<object>} created job */
   createJob(_input) {
     return ni('IPrintRepository.createJob');
   }
@@ -150,7 +162,15 @@ export class ISurveyRepository {
   listHistory() {
     return ni('ISurveyRepository.listHistory');
   }
-  /** @param {string} _id @param {{rating:number,comment?:string}} _input */
+  /** @param {string} _id */
+  getDetail(_id) {
+    return ni('ISurveyRepository.getDetail');
+  }
+  /** @param {string} _id @param {{answers:Record<string,unknown>,progress:number}} _input */
+  saveDraft(_id, _input) {
+    return ni('ISurveyRepository.saveDraft');
+  }
+  /** @param {string} _id @param {object} _input */
   submit(_id, _input) {
     return ni('ISurveyRepository.submit');
   }
@@ -179,6 +199,14 @@ export class IMgmtRepository {
   /** @param {number|string} _threadId */
   markRead(_threadId) {
     return ni('IMgmtRepository.markRead');
+  }
+  /** @param {number|string} _threadId @param {boolean} _archived */
+  archiveThread(_threadId, _archived) {
+    return ni('IMgmtRepository.archiveThread');
+  }
+  /** @param {number|string} _threadId */
+  deleteThread(_threadId) {
+    return ni('IMgmtRepository.deleteThread');
   }
 }
 
@@ -257,6 +285,10 @@ export class IFinanceRepository {
 export class IPeopleRepository {
   getDirectory() {
     return ni('IPeopleRepository.getDirectory');
+  }
+  /** @param {{ids?:string[]}} _filters */
+  exportStudents(_filters) {
+    return ni('IPeopleRepository.exportStudents');
   }
 }
 

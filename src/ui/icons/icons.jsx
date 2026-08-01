@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // Icon registry — line geometric set, 1.7 default stroke.
 // Each entry holds the inner SVG children; a few override stroke for heavier marks.
 // Rendered by <Icon name="..." /> (see Icon.jsx). viewBox is 0 0 24 24.
@@ -156,6 +157,17 @@ export const ICONS = {
     children: (
       <path d="M3 7 a2 2 0 0 1 2-2 h4 L11 7 H19 a2 2 0 0 1 2 2 V18 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z" />
     ),
+  },
+  archive: {
+    children: (
+      <>
+        <rect x="4" y="7" width="16" height="13" rx="2" />
+        <path d="M3 4 H21 V8 H3 Z M9 12 H15" />
+      </>
+    ),
+  },
+  trash: {
+    children: <path d="M4 7 H20 M9 7 V4 H15 V7 M7 7 L8 21 H16 L17 7 M10 11 V17 M14 11 V17" />,
   },
   upload: { children: <path d="M12 16 V4 M6 10 L12 4 L18 10 M4 20 H20" /> },
   print: {

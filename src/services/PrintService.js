@@ -12,7 +12,7 @@ export class PrintService {
   getLibrary() {
     return this.printRepo.getLibrary();
   }
-  /** @param {{printerId:string, doc:string, copies?:number, size?:string}} input @returns {Promise<object>} created job */
+  /** @param {{printerId:string, doc:string, copies?:number, size?:string, libraryFileId?:string}} input @returns {Promise<object>} created job */
   createJob(input) {
     return this.printRepo.createJob(input);
   }

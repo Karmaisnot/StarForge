@@ -50,6 +50,8 @@ model Academy {
   mgmtThreads       MgmtThread[]
   notifications     Notification[]
   materials         Material[]
+  workspaceStates   WorkspaceState[]
+  accessScans       AccessScan[]
 }
 
 model Branch {
@@ -84,6 +86,7 @@ model Teacher {
   branch       Branch   @relation(fields: [branchId], references: [id])
   name         String
   username     String
+  roleKey      String   @default("teacher")
   role         Json // localized
   passwordHash String
   createdAt    DateTime @default(now())
@@ -91,21 +94,25 @@ model Teacher {
   // per-teacher pointer to the AI conversation currently open (avoids a global flag race)
   activeAiConversationId String?
 
-  subjects          TeacherSubject[]
-  preferences       TeacherPreferences?
-  aiUsage           AiUsage?
-  sessions          AuthSession[]
-  cohorts           Cohort[]
-  cardsIssued       Card[]
-  attendanceRecords AttendanceRecord[]
-  tasks             Task[]
-  aiConversations   AiConversation[]
-  printJobs         PrintJob[]
-  libraryFiles      LibraryFile[]
-  surveyResponses   SurveyResponse[]
-  mgmtThreads       MgmtThread[]
-  notifications     Notification[]
-  materials         Material[]
+  subjects              TeacherSubject[]
+  preferences           TeacherPreferences?
+  aiUsage               AiUsage?
+  sessions              AuthSession[]
+  cohorts               Cohort[]
+  cardsIssued           Card[]
+  attendanceRecords     AttendanceRecord[]
+  cohortInstructorRoles CohortInstructor[]
+  cohortLessons         CohortLesson[]
+  cohortProgressions    CohortProgression[]
+  tasks                 Task[]
+  aiConversations       AiConversation[]
+  printJobs             PrintJob[]
+  libraryFiles          LibraryFile[]
+  surveyResponses       SurveyResponse[]
+  mgmtThreads           MgmtThread[]
+  notifications         Notification[]
+  materials             Material[]
+  accessScans           AccessScan[]
 
   @@unique([academyId, username])
   @@index([academyId])
@@ -166,30 +173,97 @@ model AuthSession {
 // ----------------------------------------------------------------------------
 
 model Cohort {
-  id           String   @id @default(cuid())
-  academyId    String
-  academy      Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  teacherId    String
-  teacher      Teacher  @relation(fields: [teacherId], references: [id])
-  subjectId    String?
-  subject      Subject? @relation(fields: [subjectId], references: [id])
-  name         String // plain, e.g. "9-B Algebra"
-  level        Json // localized
-  subjectLabel Json // localized (display parity with the `subject` fixture field)
-  room         Json // localized
-  color          String
-  nextAt         DateTime? // real next lesson time
-  nextLabel      Json? // localized display (e.g. "Today · 09:00")
-  lessonsPerWeek Int       @default(0) // weekly cadence; feeds teacher.summary + schedule
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(cuid())
+  academyId       String
+  academy         Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  teacherId       String
+  teacher         Teacher   @relation(fields: [teacherId], references: [id])
+  subjectId       String?
+  subject         Subject?  @relation(fields: [subjectId], references: [id])
+  name            String // plain, e.g. "9-B Algebra"
+  level           Json // localized
+  subjectLabel    Json // localized (display parity with the `subject` fixture field)
+  room            Json // localized
+  color           String
+  nextAt          DateTime? // real next lesson time
+  nextLabel       Json? // localized display (e.g. "Today · 09:00")
+  lessonsPerWeek  Int       @default(0) // weekly cadence; feeds teacher.summary + schedule
+  progressionMode String    @default("level") // level | month
+  currentMonth    Int       @default(1)
+  createdAt       DateTime  @default(now())
 
   students          Student[]
   attendanceRecords AttendanceRecord[]
+  instructors       CohortInstructor[]
+  lessons           CohortLesson[]
+  progressionEvents CohortProgression[]
   cards             Card[]
   aiConversations   AiConversation[]
 
   @@index([academyId])
   @@index([teacherId])
+}
+
+model CohortInstructor {
+  id         String   @id @default(cuid())
+  cohortId   String
+  cohort     Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  teacherId  String
+  teacher    Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  role       String // main | video | support | custom
+  position   Int      @default(0)
+  assignedAt DateTime @default(now())
+
+  @@unique([cohortId, teacherId, role])
+  @@index([cohortId, position])
+  @@index([teacherId])
+}
+
+model CohortLesson {
+  id        String   @id @default(cuid())
+  cohortId  String
+  cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id])
+  title     Json
+  type      String // main | video | support | custom
+  room      Json
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String   @default("scheduled")
+  createdAt DateTime @default(now())
+
+  homework CohortHomework?
+
+  @@index([cohortId, startsAt])
+  @@index([teacherId])
+}
+
+model CohortHomework {
+  id        String       @id @default(cuid())
+  lessonId  String       @unique
+  lesson    CohortLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title     Json
+  dueAt     DateTime
+  submitted Int          @default(0)
+  total     Int          @default(0)
+  createdAt DateTime     @default(now())
+}
+
+model CohortProgression {
+  id           String   @id @default(cuid())
+  cohortId     String
+  cohort       Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  advancedById String
+  advancedBy   Teacher  @relation(fields: [advancedById], references: [id])
+  mode         String // level | month
+  fromValue    Json
+  toValue      Json
+  readiness    Int
+  createdAt    DateTime @default(now())
+
+  @@index([cohortId, createdAt])
+  @@index([advancedById])
 }
 
 model Student {
@@ -205,6 +279,7 @@ model Student {
 
   cards             Card[]
   attendanceEntries AttendanceEntry[]
+  accessScans       AccessScan[]
 
   @@index([academyId])
   @@index([cohortId])
@@ -338,19 +413,19 @@ model Task {
 // ----------------------------------------------------------------------------
 
 model AiConversation {
-  id            String      @id @default(cuid())
+  id            String    @id @default(cuid())
   academyId     String
-  academy       Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy       Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
   teacherId     String
-  teacher       Teacher     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher       Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   cohortId      String?
-  cohort        Cohort?     @relation(fields: [cohortId], references: [id])
+  cohort        Cohort?   @relation(fields: [cohortId], references: [id])
   name          Json // mixed
   preview       Json? // curated AI-summary snippet shown in the conversation list (distinct from last message)
-  isAll         Boolean     @default(false)
-  pinned        Boolean     @default(false)
+  isAll         Boolean   @default(false)
+  pinned        Boolean   @default(false)
   color         String?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime  @default(now())
   lastMessageAt DateTime?
 
   messages AiMessage[]
@@ -430,21 +505,36 @@ model LibraryFile {
 // ----------------------------------------------------------------------------
 
 model Survey {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   academyId     String
-  academy       Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy       Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
   title         Json // localized
   issuer        Json // localized
-  questions     Int      @default(0)
+  questions     Int       @default(0)
   estimateLabel Json? // localized
   deadlineAt    DateTime?
-  urgent        Boolean  @default(false)
-  anonymous     Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  urgent        Boolean   @default(false)
+  anonymous     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
 
-  responses SurveyResponse[]
+  responses     SurveyResponse[]
+  questionItems SurveyQuestion[]
 
   @@index([academyId])
+}
+
+model SurveyQuestion {
+  id          String  @id @default(cuid())
+  surveyId    String
+  survey      Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  kind        String // rating | single | multi | boolean | text | longText
+  prompt      Json
+  description Json?
+  options     Json?
+  required    Boolean @default(false)
+  position    Int     @default(0)
+
+  @@index([surveyId, position])
 }
 
 model SurveyResponse {
@@ -456,6 +546,7 @@ model SurveyResponse {
   status      String // submitted | skipped
   rating      Int?
   comment     String?
+  answers     Json?
   progress    Int      @default(0)
   submittedAt DateTime @default(now())
 
@@ -468,22 +559,25 @@ model SurveyResponse {
 // ----------------------------------------------------------------------------
 
 model MgmtThread {
-  id        String   @id @default(cuid())
-  academyId String
-  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  teacherId String
-  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  name      Json // mixed
-  role      Json? // localized
-  channel   Boolean  @default(false)
-  lead      Boolean  @default(false)
-  pinned    Boolean  @default(false)
-  online    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  academyId  String
+  academy    Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  teacherId  String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  name       Json // mixed
+  role       Json? // localized
+  channel    Boolean   @default(false)
+  lead       Boolean   @default(false)
+  pinned     Boolean   @default(false)
+  online     Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  archivedAt DateTime?
+  deletedAt  DateTime?
 
   messages MgmtMessage[]
 
   @@index([teacherId])
+  @@index([teacherId, deletedAt])
 }
 
 model MgmtMessage {
@@ -540,4 +634,46 @@ model Material {
   createdAt DateTime @default(now())
 
   @@index([academyId])
+}
+
+// ---------------------------------------------------------------------------
+// Persisted workspace documents
+// ---------------------------------------------------------------------------
+
+// A compact persistence boundary for the staff workspaces whose UI is composed
+// from several small domain slices (work, finance, people, academic and
+// operations). Documents are tenant-scoped and optionally user-scoped through
+// `scope` (for example, `academy` or `teacher:<id>`). All writes go through
+// validated server use-cases; the browser never keeps authoritative state.
+model WorkspaceState {
+  id        String   @id @default(cuid())
+  academyId String
+  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  scope     String
+  feature   String
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([academyId, scope, feature])
+  @@index([academyId, feature])
+}
+
+// A durable security-desk audit trail. A scan is recorded even when its code
+// is invalid, making the scanner a real check-in operation rather than a UI
+// success animation.
+model AccessScan {
+  id          String   @id @default(cuid())
+  academyId   String
+  academy     Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  studentId   String?
+  student     Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  scannedById String
+  scannedBy   Teacher  @relation(fields: [scannedById], references: [id], onDelete: Cascade)
+  code        String
+  valid       Boolean
+  scannedAt   DateTime @default(now())
+
+  @@index([academyId, scannedAt])
+  @@index([studentId])
 }

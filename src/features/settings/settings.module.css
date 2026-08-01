@@ -75,19 +75,95 @@
 }
 .langRow {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
 }
-.select {
-  flex: 1;
-  padding: 10px 12px;
-  border-radius: 10px;
+.langBadge {
+  width: 42px;
+  min-height: 66px;
   border: 1px solid var(--sf-border);
-  background: var(--sf-bg);
+  border-radius: 14px;
+  background: var(--sf-primary-soft);
+  color: var(--sf-primary);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+.languagePicker {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 5px;
+  border-radius: 15px;
+  border: 1px solid var(--sf-border);
+  background: linear-gradient(135deg, var(--sf-surface-2), var(--sf-surface-3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.languageOption {
+  position: relative;
+  min-width: 0;
+  min-height: 64px;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--sf-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
   font-family: inherit;
-  font-size: 14px;
+  text-align: left;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+.languageOption:hover {
   color: var(--sf-ink);
-  outline: none;
+  background: var(--sf-surface);
+  transform: translateY(-1px);
+}
+.languageOption:focus-visible {
+  outline: 2px solid var(--sf-primary);
+  outline-offset: 2px;
+}
+.languageOptionActive {
+  color: var(--sf-bg);
+  background: var(--sf-primary);
+  border-color: var(--sf-primary);
+  box-shadow: 0 7px 14px color-mix(in srgb, var(--sf-primary) 28%, transparent);
+  transform: translateY(-1px);
+}
+.languageCode {
+  font-family: var(--sf-font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--sf-primary);
+}
+.languageOptionActive .languageCode {
+  color: currentColor;
+  opacity: 0.7;
+}
+.languageName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+}
+.languageCheck {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 2px;
+  border-radius: 50%;
+  background: rgba(255, 252, 245, 0.18);
+  color: currentColor;
 }
 .cardHint {
   padding: 12px 18px;
@@ -114,5 +190,20 @@
   }
   .profile > button {
     width: 100%;
+  }
+  .languageOption {
+    min-height: 52px;
+    padding: 8px 4px;
+    align-items: center;
+  }
+  .languageCode {
+    font-size: 11px;
+  }
+  .languageName {
+    display: none;
+  }
+  .languageCheck {
+    top: 6px;
+    right: 5px;
   }
 }

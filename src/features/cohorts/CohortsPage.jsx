@@ -1,81 +1,646 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { AiBadge, Avatar, Button, Card, Chip, Icon, Modal, StarMark } from '@/ui';
+import { Avatar, Button, Chip, Icon, Modal, ProgressBar, StarMark } from '@/ui';
 import { attendanceTone } from '@/domain/models/cohort.js';
-import { useCohorts, useRoster } from '@/hooks/data.js';
+import { useCohorts } from '@/hooks/data.js';
+import { useAsync } from '@/hooks/useAsync.js';
 import { useServices } from '@/hooks/useServices.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
-import { plural } from '@/i18n/plural.js';
 import styles from './cohorts.module.css';
 
-function AttendanceModal({ open, onClose, cohort, onSave }) {
+export function CohortsPage() {
+  const { cohortId } = useParams();
+  return cohortId ? <CohortDetail cohortId={cohortId} /> : <CohortDirectory />;
+}
+
+function CohortDirectory() {
+  const state = useCohorts();
+  const navigate = useNavigate();
   const { t } = useT();
-  const { data: roster } = useRoster(open ? cohort?.id : undefined);
+  const [query, setQuery] = useState('');
+  const [level, setLevel] = useState('all');
+  return (
+    <AsyncBoundary state={state}>
+      {(loaded) => {
+        const cohorts = Array.isArray(loaded) ? loaded : [];
+        const levels = unique(cohorts.map((cohort) => cohort.level));
+        const needle = query.trim().toLowerCase();
+        const visible = cohorts.filter(
+          (cohort) =>
+            (level === 'all' || String(cohort.level) === level) &&
+            (!needle ||
+              `${cohort.name} ${cohort.subject} ${cohort.level}`.toLowerCase().includes(needle)),
+        );
+        const students = cohorts.reduce((sum, cohort) => sum + Number(cohort.studentCount ?? 0), 0);
+        const averageAttendance = cohorts.length
+          ? Math.round(
+              cohorts.reduce((sum, cohort) => sum + Number(cohort.attendance ?? 0), 0) /
+                cohorts.length,
+            )
+          : 0;
+        return (
+          <>
+            <PageHeader
+              title={t('cohorts.title')}
+              subtitle={`${cohorts.length} ${t('cohorts.groupCount')} · ${students} ${t('cohorts.tStudents')}`}
+            />
+
+            <section className={styles.directoryHero}>
+              <div>
+                <span className={styles.eyebrow}>
+                  <StarMark size={15} color="var(--sf-primary)" /> {t('cohorts.myTeachingSpace')}
+                </span>
+                <h2>{t('cohorts.directoryHero')}</h2>
+                <p>{t('cohorts.directoryBody')}</p>
+              </div>
+              <div className={styles.heroMetrics}>
+                <div>
+                  <strong className="sf-mono">{cohorts.length}</strong>
+                  <span>{t('cohorts.groupCount')}</span>
+                </div>
+                <div>
+                  <strong className="sf-mono">{students}</strong>
+                  <span>{t('cohorts.tStudents')}</span>
+                </div>
+                <div>
+                  <strong className="sf-mono">{averageAttendance}%</strong>
+                  <span>{t('cohorts.tAttendance')}</span>
+                </div>
+              </div>
+            </section>
+
+            <div className={styles.directoryTools}>
+              <label>
+                <Icon name="search" size={16} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('cohorts.search')}
+                />
+              </label>
+              <select
+                value={level}
+                onChange={(event) => setLevel(event.target.value)}
+                aria-label={t('cohorts.tLevel')}
+              >
+                <option value="all">{t('cohorts.allLevels')}</option>
+                {levels.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+              <span>
+                <strong className="sf-mono">{visible.length}</strong> {t('cohorts.results')}
+              </span>
+            </div>
+
+            {visible.length ? (
+              <section className={styles.groupGrid}>
+                {visible.map((cohort) => (
+                  <button
+                    key={cohort.id}
+                    type="button"
+                    className={styles.groupCard}
+                    onClick={() => navigate(`/cohorts/${cohort.id}`)}
+                  >
+                    <span className={styles.groupAccent} style={{ background: cohort.color }} />
+                    <span className={styles.groupCardHead}>
+                      <span className={styles.groupMark} style={{ color: cohort.color }}>
+                        <StarMark size={22} color="currentColor" />
+                      </span>
+                      <span>
+                        <small>{cohort.level}</small>
+                        <strong>{cohort.name}</strong>
+                        <em>
+                          {cohort.subject} · {cohort.room}
+                        </em>
+                      </span>
+                      <Icon name="arrowR" size={18} />
+                    </span>
+                    <span className={styles.groupStats}>
+                      <span>
+                        <small>{t('cohorts.tStudents')}</small>
+                        <strong className="sf-mono">{cohort.studentCount}</strong>
+                      </span>
+                      <span>
+                        <small>{t('cohorts.tAttendance')}</small>
+                        <strong
+                          className="sf-mono"
+                          style={{ color: attendanceTone(cohort.attendance) }}
+                        >
+                          {cohort.attendance}%
+                        </strong>
+                      </span>
+                      <span>
+                        <small>{t('cohorts.tCards')}</small>
+                        <strong className="sf-mono">
+                          ↑{cohort.up} · ↓{cohort.down}
+                        </strong>
+                      </span>
+                    </span>
+                    <span className={styles.nextLine}>
+                      <Icon name="cal" size={15} />
+                      <span>
+                        <small>{t('cohorts.nextLesson')}</small>
+                        <strong>{cohort.next || '—'}</strong>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </section>
+            ) : (
+              <section className={styles.emptyState}>
+                <Icon name="cohort" size={28} />
+                <h2>{t('cohorts.emptyTitle')}</h2>
+                <p>{t('cohorts.emptyBody')}</p>
+              </section>
+            )}
+          </>
+        );
+      }}
+    </AsyncBoundary>
+  );
+}
+
+function CohortDetail({ cohortId }) {
+  const { cohorts } = useServices();
+  const { t, locale } = useT();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [reloadKey, setReloadKey] = useState(0);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const [rangeMode, setRangeMode] = useState('month');
+  const initialRange = currentMonthRange();
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
+  const state = useAsync(async () => {
+    const [cohort, roster, workspace] = await Promise.all([
+      cohorts.getById(cohortId),
+      cohorts.getRoster(cohortId),
+      cohorts.getWorkspace(cohortId),
+    ]);
+    return { cohort, roster: roster ?? [], workspace: workspace ?? {} };
+  }, [cohortId, locale, reloadKey]);
+
+  return (
+    <AsyncBoundary state={state}>
+      {({ cohort, roster, workspace }) => {
+        if (!cohort) return <NotFound onBack={() => navigate('/cohorts')} t={t} />;
+        const instructors = workspace.instructors ?? [];
+        const upcoming = workspace.upcomingLessons ?? [];
+        const progression = workspace.progression ?? {};
+        const history = workspace.attendanceHistory ?? [];
+        const visibleHistory = history.filter(
+          (entry) => (!from || entry.date >= from) && (!to || entry.date <= to),
+        );
+        const dates = unique(visibleHistory.map((entry) => entry.date)).sort();
+        const byStudentDate = new Map(
+          visibleHistory.map((entry) => [`${entry.studentId}:${entry.date}`, entry.status]),
+        );
+
+        const selectRangeMode = (mode) => {
+          setRangeMode(mode);
+          if (mode === 'month') {
+            const range = currentMonthRange();
+            setFrom(range.from);
+            setTo(range.to);
+          } else {
+            setFrom(progression.startedAt || '');
+            setTo(new Date().toISOString().slice(0, 10));
+          }
+        };
+
+        const saveAttendance = async (entries) => {
+          try {
+            await cohorts.saveAttendance(cohort.id, entries);
+            toast(t('cohorts.attendanceSaved'), 'success');
+            setAttendanceOpen(false);
+            setReloadKey((key) => key + 1);
+          } catch {
+            toast(t('common.error'), 'danger');
+          }
+        };
+
+        const advance = async () => {
+          setAdvancing(true);
+          try {
+            await cohorts.advance(cohort.id);
+            toast(t('cohorts.advanced'), 'success');
+            setAdvanceOpen(false);
+            setReloadKey((key) => key + 1);
+          } catch {
+            toast(t('common.error'), 'danger');
+          } finally {
+            setAdvancing(false);
+          }
+        };
+
+        return (
+          <>
+            <PageHeader
+              title={cohort.name}
+              subtitle={`${cohort.subject} · ${cohort.level} · ${cohort.room}`}
+              right={
+                <div className={styles.detailActions}>
+                  <Button variant="outline" icon="arrowL" onClick={() => navigate('/cohorts')}>
+                    {t('cohorts.back')}
+                  </Button>
+                  <Button variant="primary" icon="trend" onClick={() => setAdvanceOpen(true)}>
+                    {t('cohorts.advanceGroup')}
+                  </Button>
+                </div>
+              }
+            />
+
+            <section className={styles.detailHero}>
+              <div className={styles.detailHeroCopy}>
+                <span className={styles.eyebrow}>
+                  <i style={{ background: cohort.color }} /> {t('cohorts.yourGroup')}
+                </span>
+                <h1>{cohort.name}</h1>
+                <p>
+                  {cohort.subject} · {cohort.level} · {cohort.room}
+                </p>
+                <div className={styles.detailStats}>
+                  <span>
+                    <strong className="sf-mono">{roster.length || cohort.studentCount}</strong>
+                    <small>{t('cohorts.tStudents')}</small>
+                  </span>
+                  <span>
+                    <strong
+                      className="sf-mono"
+                      style={{ color: attendanceTone(cohort.attendance) }}
+                    >
+                      {cohort.attendance}%
+                    </strong>
+                    <small>{t('cohorts.tAttendance')}</small>
+                  </span>
+                  <span>
+                    <strong className="sf-mono">{progression.readiness ?? '—'}%</strong>
+                    <small>{t('cohorts.readiness')}</small>
+                  </span>
+                </div>
+              </div>
+              <NextLesson lesson={workspace.nextLesson} locale={locale} t={t} />
+            </section>
+
+            <section className={styles.instructorsSection}>
+              <header>
+                <div>
+                  <span>{t('cohorts.teachingTeam')}</span>
+                  <h2>{t('cohorts.allInstructors')}</h2>
+                </div>
+                <small>
+                  {instructors.length} {t('cohorts.instructors')}
+                </small>
+              </header>
+              <div className={styles.instructors}>
+                {instructors.map((instructor) => (
+                  <article key={instructor.id} data-you={instructor.isYou ? '1' : '0'}>
+                    <span className={styles.instructorAvatar}>
+                      <Avatar name={instructor.name} size={48} />
+                      <i data-online={instructor.online ? '1' : '0'} />
+                    </span>
+                    <div>
+                      <strong>{instructor.name}</strong>
+                      <small>{instructor.roleLabel}</small>
+                    </div>
+                    {instructor.isYou && <Chip tone="primary">{t('cohorts.you')}</Chip>}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <div className={styles.lessonGrid}>
+              <LastLesson lesson={workspace.lastLesson} locale={locale} t={t} />
+              <UpcomingLessons lessons={upcoming} locale={locale} t={t} />
+            </div>
+
+            <section className={styles.attendanceSection}>
+              <header className={styles.attendanceHead}>
+                <div>
+                  <span>{t('cohorts.attendanceJournal')}</span>
+                  <h2>
+                    {t('cohorts.rosterTitle')} · {roster.length}
+                  </h2>
+                </div>
+                <div className={styles.attendanceTools}>
+                  <div className={styles.rangeTabs}>
+                    {['month', 'level'].map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        data-on={rangeMode === mode ? '1' : '0'}
+                        onClick={() => selectRangeMode(mode)}
+                      >
+                        {t(`cohorts.range.${mode}`)}
+                      </button>
+                    ))}
+                  </div>
+                  <label>
+                    <span>{t('cohorts.from')}</span>
+                    <input
+                      type="date"
+                      value={from}
+                      onChange={(event) => {
+                        setRangeMode('custom');
+                        setFrom(event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>{t('cohorts.to')}</span>
+                    <input
+                      type="date"
+                      value={to}
+                      onChange={(event) => {
+                        setRangeMode('custom');
+                        setTo(event.target.value);
+                      }}
+                    />
+                  </label>
+                  <Button variant="primary" icon="check" onClick={() => setAttendanceOpen(true)}>
+                    {t('cohorts.takeAttendance')}
+                  </Button>
+                </div>
+              </header>
+              <div className={styles.attendanceScroller}>
+                <div
+                  className={styles.attendanceMatrix}
+                  style={{ '--date-count': Math.max(1, dates.length) }}
+                >
+                  <div className={styles.matrixCorner}>{t('cohorts.student')}</div>
+                  {dates.map((date) => (
+                    <div key={date} className={styles.dateCell}>
+                      {formatShortDate(date, locale)}
+                    </div>
+                  ))}
+                  <div className={styles.matrixSummary}>{t('cohorts.total')}</div>
+                  {roster.map((student) => (
+                    <AttendanceRow
+                      key={student.id}
+                      student={student}
+                      dates={dates}
+                      byStudentDate={byStudentDate}
+                      t={t}
+                    />
+                  ))}
+                </div>
+                {!dates.length && (
+                  <div className={styles.noAttendance}>{t('cohorts.noAttendanceRange')}</div>
+                )}
+              </div>
+              <div className={styles.legend}>
+                {['present', 'late', 'absent'].map((status) => (
+                  <span key={status}>
+                    <i data-status={status} />
+                    {t(`cohorts.${status}`)}
+                  </span>
+                ))}
+              </div>
+            </section>
+
+            <AttendanceModal
+              open={attendanceOpen}
+              onClose={() => setAttendanceOpen(false)}
+              roster={roster}
+              cohort={cohort}
+              onSave={saveAttendance}
+              t={t}
+            />
+            <Modal
+              open={advanceOpen}
+              onClose={() => setAdvanceOpen(false)}
+              title={t('cohorts.advanceGroup')}
+            >
+              <div className={styles.advanceConfirm}>
+                <span>
+                  <Icon name="trend" size={24} />
+                </span>
+                <h3>
+                  {t('cohorts.advanceTo')}{' '}
+                  {displayProgression(progression.next, progression.mode, t)}
+                </h3>
+                <p>{t('cohorts.advanceWarning')}</p>
+                <div className={styles.readinessBlock}>
+                  <div>
+                    <strong>{t('cohorts.readiness')}</strong>
+                    <span className="sf-mono">{progression.readiness ?? 0}%</span>
+                  </div>
+                  <ProgressBar
+                    value={progression.readiness ?? 0}
+                    color={progression.eligible ? 'var(--sf-success)' : 'var(--sf-warn)'}
+                  />
+                </div>
+                <div className={styles.modalActions}>
+                  <Button variant="ghost" onClick={() => setAdvanceOpen(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                  <Button variant="primary" icon="trend" onClick={advance} disabled={advancing}>
+                    {t('cohorts.confirmAdvance')}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          </>
+        );
+      }}
+    </AsyncBoundary>
+  );
+}
+
+function NextLesson({ lesson, locale, t }) {
+  if (!lesson)
+    return (
+      <article className={styles.nextLesson}>
+        <span>{t('cohorts.nextLesson')}</span>
+        <h2>{t('cohorts.noUpcoming')}</h2>
+      </article>
+    );
+  return (
+    <article className={styles.nextLesson}>
+      <header>
+        <span>{t('cohorts.nextLesson')}</span>
+        <Chip tone="primary">{lesson.typeLabel}</Chip>
+      </header>
+      <h2>{lesson.title}</h2>
+      <time>{formatDateTime(lesson.startsAt, locale)}</time>
+      <div>
+        <span>
+          <Icon name="user" size={14} /> {lesson.teacherName}
+        </span>
+        <span>
+          <Icon name="pin" size={14} /> {lesson.room}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function LastLesson({ lesson, locale, t }) {
+  return (
+    <article className={styles.lessonCard}>
+      <header>
+        <span>
+          <Icon name="refresh" size={16} />
+        </span>
+        <div>
+          <small>{t('cohorts.lastLesson')}</small>
+          <h2>{lesson?.title || '—'}</h2>
+        </div>
+      </header>
+      {lesson && (
+        <>
+          <div className={styles.lessonMeta}>
+            <span>{formatDateTime(lesson.startsAt, locale)}</span>
+            <Chip tone="neutral">{lesson.typeLabel}</Chip>
+            <span>{lesson.teacherName}</span>
+          </div>
+          <div className={styles.homework}>
+            <span>
+              <Icon name="book" size={18} />
+            </span>
+            <div>
+              <small>{t('cohorts.lastHomework')}</small>
+              <strong>{lesson.homework?.title || t('cohorts.noHomework')}</strong>
+              <em>
+                {lesson.homework
+                  ? `${lesson.homework.submitted}/${lesson.homework.total} ${t('cohorts.submitted')} · ${formatDateTime(lesson.homework.dueAt, locale)}`
+                  : ''}
+              </em>
+            </div>
+          </div>
+        </>
+      )}
+    </article>
+  );
+}
+
+function UpcomingLessons({ lessons, locale, t }) {
+  return (
+    <article className={styles.lessonCard}>
+      <header>
+        <span>
+          <Icon name="cal" size={16} />
+        </span>
+        <div>
+          <small>{t('cohorts.schedule')}</small>
+          <h2>{t('cohorts.upcomingLessons')}</h2>
+        </div>
+      </header>
+      <div className={styles.lessonTimeline}>
+        {lessons.map((lesson, index) => (
+          <div key={lesson.id}>
+            <span className="sf-mono">{String(index + 1).padStart(2, '0')}</span>
+            <i />
+            <div>
+              <strong>{lesson.title}</strong>
+              <small>
+                {formatDateTime(lesson.startsAt, locale)} · {lesson.typeLabel}
+              </small>
+              <em>{lesson.teacherName}</em>
+            </div>
+          </div>
+        ))}
+        {!lessons.length && <p>{t('cohorts.noUpcoming')}</p>}
+      </div>
+    </article>
+  );
+}
+
+function AttendanceRow({ student, dates, byStudentDate, t }) {
+  const presentCount = dates.filter(
+    (date) => byStudentDate.get(`${student.id}:${date}`) === 'present',
+  ).length;
+  const markedCount = dates.filter((date) => byStudentDate.has(`${student.id}:${date}`)).length;
+  const percent = markedCount ? Math.round((presentCount / markedCount) * 100) : student.attendance;
+  return (
+    <>
+      <div className={styles.matrixStudent}>
+        <Avatar name={student.name} size={34} />
+        <span>
+          <strong>{student.name}</strong>
+          <small>{student.studentId}</small>
+        </span>
+      </div>
+      {dates.map((date) => {
+        const status = byStudentDate.get(`${student.id}:${date}`);
+        return (
+          <div key={date} className={styles.statusCell}>
+            <span data-status={status || 'none'} aria-label={status ? t(`cohorts.${status}`) : '—'}>
+              {status === 'present'
+                ? 'P'
+                : status === 'late'
+                  ? 'L'
+                  : status === 'absent'
+                    ? 'A'
+                    : '—'}
+            </span>
+          </div>
+        );
+      })}
+      <div className={styles.matrixPercent} style={{ color: attendanceTone(percent) }}>
+        {percent}%
+      </div>
+    </>
+  );
+}
+
+function AttendanceModal({ open, onClose, roster, cohort, onSave, t }) {
   const [present, setPresent] = useState({});
-  // Reset selections each time the modal opens or the cohort changes, so one
-  // cohort's attendance never bleeds into another's.
   useEffect(() => {
     if (open) setPresent({});
   }, [open, cohort?.id]);
-  const list = roster ?? [];
-  const presentCount = list.filter((s) => present[s.id] !== false).length;
-  const save = () => {
-    const total = list.length;
-    // Guard empty roster: keep current attendance by passing null percent.
-    const percent = total === 0 ? null : Math.round((presentCount / total) * 100);
-    // Build real persistence entries from the roster rows using the actual
-    // student ids, mirroring the toggle state shown in the modal.
-    const entries = list.map((s) => ({ studentId: s.id, present: present[s.id] !== false }));
-    onSave?.(cohort?.id, percent, presentCount, total, entries);
-    onClose();
-  };
+  const presentCount = roster.filter((student) => present[student.id] !== false).length;
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={`${cohort?.name ?? ''} · ${t('cohorts.takeAttendance')}`}
+      title={`${cohort.name} · ${t('cohorts.takeAttendance')}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" icon="check" onClick={save}>
-            {presentCount}/{list.length}
+          <Button
+            variant="primary"
+            icon="check"
+            onClick={() =>
+              onSave(
+                roster.map((student) => ({
+                  studentId: student.id,
+                  present: present[student.id] !== false,
+                })),
+              )
+            }
+          >
+            {presentCount}/{roster.length}
           </Button>
         </>
       }
     >
-      <div className={styles.attList}>
-        {list.map((s) => {
-          const isPresent = present[s.id] !== false;
+      <div className={styles.attendanceModalList}>
+        {roster.map((student) => {
+          const isPresent = present[student.id] !== false;
           return (
             <button
-              key={s.id}
+              key={student.id}
               type="button"
-              className={styles.attRow}
-              onClick={() => setPresent((p) => ({ ...p, [s.id]: !isPresent }))}
+              data-present={isPresent ? '1' : '0'}
+              onClick={() => setPresent((current) => ({ ...current, [student.id]: !isPresent }))}
             >
-              <span
-                className={styles.attCheck}
-                style={{
-                  background: isPresent ? 'var(--sf-success)' : 'transparent',
-                  borderColor: isPresent ? 'var(--sf-success)' : 'var(--sf-border-strong)',
-                }}
-              >
-                {isPresent && (
-                  <Icon name="check" size={12} stroke={3} style={{ color: '#fffcf5' }} />
-                )}
+              <span>
+                <Icon name={isPresent ? 'check' : 'x'} size={13} />
               </span>
-              <Avatar name={s.name} size={28} />
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 13.5 }}>{s.name}</span>
-              <span
-                style={{ fontSize: 12, color: isPresent ? 'var(--sf-success)' : 'var(--sf-muted)' }}
-              >
-                {isPresent ? t('cohorts.present') : t('cohorts.absent')}
-              </span>
+              <Avatar name={student.name} size={36} />
+              <strong>{student.name}</strong>
+              <small>{t(isPresent ? 'cohorts.present' : 'cohorts.absent')}</small>
             </button>
           );
         })}
@@ -84,438 +649,52 @@ function AttendanceModal({ open, onClose, cohort, onSave }) {
   );
 }
 
-const ROSTER_CAP = 6;
-
-function StudentModal({ student, onClose }) {
-  const { t } = useT();
-  if (!student) return null;
+function NotFound({ onBack, t }) {
   return (
-    <Modal open={Boolean(student)} onClose={onClose} title={student.name}>
-      <div className={styles.stuMeta}>
-        <span className="sf-mono">{student.studentId}</span>
-      </div>
-      <div className={styles.stuStats}>
-        <div className={styles.stuStat}>
-          <div
-            className="sf-mono"
-            style={{ fontSize: 20, fontWeight: 700, color: attendanceTone(student.attendance) }}
-          >
-            {student.attendance}%
-          </div>
-          <div className={styles.stuStatL}>{t('common.attendance')}</div>
-        </div>
-        <div className={styles.stuStat}>
-          <div className="sf-mono" style={{ fontSize: 20, fontWeight: 700, color: '#7a4f0e' }}>
-            ↑{student.up}
-          </div>
-          <div className={styles.stuStatL}>{t('common.upCard')}</div>
-        </div>
-        <div className={styles.stuStat}>
-          <div
-            className="sf-mono"
-            style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: student.down > 0 ? 'var(--sf-danger)' : 'var(--sf-muted)',
-            }}
-          >
-            ↓{student.down}
-          </div>
-          <div className={styles.stuStatL}>{t('common.downCard')}</div>
-        </div>
-      </div>
-    </Modal>
+    <section className={styles.emptyState}>
+      <Icon name="cohort" size={28} />
+      <h2>{t('cohorts.emptyTitle')}</h2>
+      <Button variant="outline" icon="arrowL" onClick={onBack}>
+        {t('cohorts.back')}
+      </Button>
+    </section>
   );
 }
 
-function Roster({ cohortId }) {
-  const { data: roster } = useRoster(cohortId);
-  const { t } = useT();
-  const [sortBy, setSortBy] = useState('default'); // default | attendance | name
-  const [expanded, setExpanded] = useState(false);
-  const [selected, setSelected] = useState(null);
+function currentMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const local = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return { from: local(from), to: local(to) };
+}
 
-  const sorted = [...(roster ?? [])];
-  if (sortBy === 'attendance') sorted.sort((a, b) => b.attendance - a.attendance);
-  else if (sortBy === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name));
-  const visible = expanded ? sorted : sorted.slice(0, ROSTER_CAP);
-  const sortLabel =
-    sortBy === 'attendance'
-      ? t('cohorts.sortAttendance')
-      : sortBy === 'name'
-        ? t('cohorts.sortName')
-        : t('cohorts.sort');
-  const cycleSort = () =>
-    setSortBy((s) => (s === 'default' ? 'attendance' : s === 'attendance' ? 'name' : 'default'));
-
-  return (
-    <Card
-      title={`${t('cohorts.rosterTitle')} · ${sorted.length}`}
-      padded={false}
-      action={
-        <button type="button" className={styles.link} onClick={cycleSort}>
-          {sortLabel}
-        </button>
-      }
-    >
-      {visible.map((s) => (
-        <div key={s.id} className={styles.rosterRow}>
-          <Avatar name={s.name} size={36} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{s.name}</span>
-              {s.flag === 'top' && <StarMark size={12} color="var(--sf-accent)" />}
-              {s.flag === 'warn' && <span className={styles.warnDot} />}
-            </div>
-            <div
-              className="sf-mono"
-              style={{ fontSize: 10.5, color: 'var(--sf-muted)', marginTop: 1 }}
-            >
-              {s.studentId}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div
-                className="sf-mono"
-                style={{ fontSize: 13, fontWeight: 700, color: attendanceTone(s.attendance) }}
-              >
-                {s.attendance}%
-              </div>
-              <div className={styles.miniLabel}>{t('common.attendance')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 5 }}>
-              <div
-                className={styles.cardMini}
-                style={{
-                  background: 'linear-gradient(135deg, #f6e0ac, #e9c272)',
-                  borderColor: '#c49a3a',
-                }}
-              >
-                <StarMark size={10} color="#7a4f0e" />
-                <span className="sf-mono">{s.up}</span>
-              </div>
-              {s.down > 0 && (
-                <div
-                  className={styles.cardMini}
-                  style={{
-                    background: 'linear-gradient(135deg, #f0c9be, #d88a75)',
-                    borderColor: '#a14026',
-                  }}
-                >
-                  <StarMark size={10} color="#5c1a0c" />
-                  <span className="sf-mono">{s.down}</span>
-                </div>
-              )}
-            </div>
-            <button className={styles.iconBtn} onClick={() => setSelected(s)} aria-label={s.name}>
-              <Icon name="chevR" size={14} />
-            </button>
-          </div>
-        </div>
-      ))}
-      {sorted.length > ROSTER_CAP && (
-        <button
-          type="button"
-          className={styles.rosterMore}
-          aria-expanded={expanded}
-          onClick={() => setExpanded((e) => !e)}
-        >
-          {expanded
-            ? t('cohorts.showLess')
-            : `${t('cohorts.showMore')} · ${sorted.length - ROSTER_CAP}`}
-        </button>
-      )}
-      <StudentModal student={selected} onClose={() => setSelected(null)} />
-    </Card>
+function formatShortDate(value, locale) {
+  return new Intl.DateTimeFormat(localeCode(locale), { day: '2-digit', month: 'short' }).format(
+    new Date(`${value}T12:00:00`),
   );
 }
 
-export function CohortsPage() {
-  // `reloadKey` remounts the data-bearing view, which re-runs its useCohorts /
-  // useRoster loaders against the API so server truth reconciles after a write.
-  const [reloadKey, setReloadKey] = useState(0);
-  const reload = () => setReloadKey((k) => k + 1);
-  return <CohortsView key={reloadKey} reload={reload} />;
+function formatDateTime(value, locale) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat(localeCode(locale), {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
-function CohortsView({ reload }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const state = useCohorts();
-  const { cohorts: cohortService } = useServices();
-  const toast = useToast();
-  const navigate = useNavigate();
-  const { t, locale } = useT();
-  const [levelFilter, setLevelFilter] = useState(null);
-  const [attendanceOpen, setAttendanceOpen] = useState(false);
-  // Optimistic, session-local attendance overrides keyed by cohort id -> percent.
-  const [attendanceOverrides, setAttendanceOverrides] = useState({});
-  const rosterRef = useRef(null);
+function localeCode(locale) {
+  return locale === 'uz' ? 'uz-UZ' : locale === 'ru' ? 'ru-RU' : 'en-US';
+}
 
-  const saveAttendance = async (cohortId, percent, present, total, entries) => {
-    if (cohortId == null || percent == null) return;
-    // Optimistic: show the new percent immediately (e2e checks this).
-    setAttendanceOverrides((m) => ({ ...m, [cohortId]: percent }));
-    toast(`${t('cohorts.attendanceSaved')} · ${present}/${total}`, 'success');
-    try {
-      await cohortService.saveAttendance(cohortId, entries ?? []);
-      // Server truth now covers this percent — drop the scratch override and
-      // refetch so the roster/attendance view reconciles.
-      setAttendanceOverrides((m) => {
-        const next = { ...m };
-        delete next[cohortId];
-        return next;
-      });
-      reload();
-    } catch {
-      // Roll back the optimistic override and surface the failure.
-      setAttendanceOverrides((m) => {
-        const next = { ...m };
-        delete next[cohortId];
-        return next;
-      });
-      toast(t('common.error'), 'danger');
-    }
-  };
+function displayProgression(value, mode, t) {
+  return mode === 'month' ? `${t('cohorts.month')} ${value}` : value || '—';
+}
 
-  return (
-    <AsyncBoundary state={state}>
-      {(loaded) => {
-        // A teacher can legitimately have no assigned cohorts yet. Treat an
-        // unexpected non-array payload as empty too, rather than allowing the
-        // detail panel below to dereference an absent selected cohort.
-        const allCohorts = Array.isArray(loaded) ? loaded : [];
-        const totalStudents = allCohorts.reduce(
-          (sum, cohort) => sum + Number(cohort.studentCount ?? 0),
-          0,
-        );
-        const levels = [...new Set(allCohorts.map((c) => c.level))];
-        const cohorts = levelFilter
-          ? allCohorts.filter((c) => c.level === levelFilter)
-          : allCohorts;
-        const cur = cohorts.find((c) => c.id === selectedId) ?? cohorts[0];
-        const cycleLevel = () => {
-          const order = [null, ...levels];
-          setLevelFilter((l) => order[(order.indexOf(l) + 1) % order.length]);
-          setSelectedId(null);
-        };
-
-        if (!cur) {
-          return (
-            <>
-              <PageHeader
-                title={t('cohorts.title')}
-                subtitle={t('cohorts.emptySubtitle')}
-              />
-              <Card className={styles.emptyCard}>
-                <div className={styles.emptyState}>
-                  <div className={styles.emptyMark} aria-hidden="true">
-                    <StarMark size={30} color="#fffcf5" />
-                  </div>
-                  <h2 className={styles.emptyTitle}>{t('cohorts.emptyTitle')}</h2>
-                  <p className={styles.emptyBody}>{t('cohorts.emptyBody')}</p>
-                </div>
-              </Card>
-            </>
-          );
-        }
-
-        return (
-          <>
-            <PageHeader
-              title={t('cohorts.title')}
-              subtitle={`${allCohorts.length} ${t('cohorts.groupCount')} · ${totalStudents} ${plural(locale, 'students', totalStudents)}`}
-              right={
-                <>
-                  <Button variant="soft" icon="filter" onClick={cycleLevel}>
-                    {levelFilter || t('common.filter')}
-                  </Button>
-                </>
-              }
-            />
-
-            <div className={styles.layout}>
-              <Card padded={false}>
-                <div className={styles.tableHead}>
-                  <div>{t('cohorts.tGroup')}</div>
-                  <div>{t('cohorts.tLevel')}</div>
-                  <div style={{ textAlign: 'right' }}>{t('cohorts.tStudents')}</div>
-                  <div style={{ textAlign: 'right' }}>{t('cohorts.tAttendance')}</div>
-                  <div style={{ textAlign: 'right' }}>{t('cohorts.tCards')}</div>
-                  <div>{t('cohorts.tNext')}</div>
-                </div>
-                {cohorts.map((c) => (
-                  <div
-                    key={c.id}
-                    className={`${styles.tableRow} ${selectedId === c.id ? styles.on : ''}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedId(c.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedId(c.id);
-                      }
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <div className={styles.cohortMark} style={{ background: c.color }}>
-                        <StarMark size={16} color="#fffcf5" />
-                      </div>
-                      <span style={{ fontWeight: 700, fontSize: 13.5 }}>{c.name}</span>
-                    </div>
-                    <div style={{ color: 'var(--sf-muted)', fontSize: 12.5 }}>{c.level}</div>
-                    <div
-                      className="sf-mono"
-                      style={{ textAlign: 'right', fontSize: 13, fontWeight: 600 }}
-                    >
-                      {c.studentCount}
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span
-                        className="sf-mono"
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: attendanceTone(attendanceOverrides[c.id] ?? c.attendance),
-                        }}
-                      >
-                        {attendanceOverrides[c.id] ?? c.attendance}%
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        textAlign: 'right',
-                        display: 'flex',
-                        gap: 6,
-                        justifyContent: 'flex-end',
-                      }}
-                    >
-                      <span
-                        className="sf-mono"
-                        style={{ color: '#7a4f0e', fontWeight: 700, fontSize: 12 }}
-                      >
-                        ↑{c.up}
-                      </span>
-                      <span
-                        className="sf-mono"
-                        style={{
-                          color: c.down > 0 ? 'var(--sf-danger)' : 'var(--sf-muted)',
-                          fontWeight: 700,
-                          fontSize: 12,
-                        }}
-                      >
-                        ↓{c.down}
-                      </span>
-                    </div>
-                    <div className="sf-mono" style={{ color: 'var(--sf-ink-2)', fontSize: 12 }}>
-                      {c.next}
-                    </div>
-                  </div>
-                ))}
-              </Card>
-
-              <div className={styles.detail}>
-                <div
-                  className={styles.hero}
-                  style={{
-                    background: `linear-gradient(135deg, ${cur.color} 0%, color-mix(in oklab, ${cur.color} 80%, black) 100%)`,
-                  }}
-                >
-                  <StarMark size={140} color="#fffcf5" className={styles.heroStar} />
-                  <div style={{ position: 'relative' }}>
-                    <Chip
-                      tone="ink"
-                      style={{ background: 'rgba(255,252,245,0.2)', color: '#fffcf5' }}
-                    >
-                      {cur.level}
-                    </Chip>
-                    <div className={styles.heroName}>
-                      {cur.name.split(' ')[0]}{' '}
-                      <span style={{ opacity: 0.7 }}>{cur.name.split(' ').slice(1).join(' ')}</span>
-                    </div>
-                    <div className={styles.heroSub}>
-                      {cur.studentCount} {plural(locale, 'students', cur.studentCount)} ·{' '}
-                      {cur.subject} · {cur.room}
-                    </div>
-                    <div className={styles.heroStats}>
-                      {[
-                        {
-                          v: `${attendanceOverrides[cur.id] ?? cur.attendance}%`,
-                          l: t('cohorts.tAttendance'),
-                        },
-                        { v: `↑${cur.up}`, l: t('common.upCard') },
-                        { v: `↓${cur.down}`, l: t('common.downCard') },
-                        { v: String(cur.studentCount), l: t('cohorts.tStudents') },
-                      ].map((s, i) => (
-                        <div key={i} className={styles.heroStat}>
-                          <div className={`sf-mono ${styles.heroStatV}`}>{s.v}</div>
-                          <div className={styles.heroStatL}>{s.l}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <Button variant="cream" icon="check" onClick={() => setAttendanceOpen(true)}>
-                        {t('cohorts.takeAttendance')}
-                      </Button>
-                      <Button
-                        variant="cream-ghost"
-                        onClick={() =>
-                          navigate('/cards', {
-                            state: { openGiveCard: true, cohortId: cur.id, cohortName: cur.name },
-                          })
-                        }
-                      >
-                        {t('cohorts.giveCard')}
-                      </Button>
-                      <Button
-                        variant="cream-ghost"
-                        aria-label={t('cohorts.viewRoster')}
-                        onClick={() =>
-                          rosterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }
-                      >
-                        {cur.studentCount} {plural(locale, 'students', cur.studentCount)}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                <div ref={rosterRef}>
-                  <Roster key={cur.id} cohortId={cur.id} />
-                </div>
-
-                <div className={styles.aiCard}>
-                  <div className={styles.aiBg} />
-                  <div style={{ position: 'relative' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <AiBadge>{t('cohorts.aiReport')}</AiBadge>
-                      <span style={{ fontSize: 11, color: 'var(--sf-muted)' }}>
-                        {t('cohorts.thisWeek')}
-                      </span>
-                    </div>
-                    <div className={styles.aiQuote}>{t('cohorts.aiQuote')}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <AttendanceModal
-              open={attendanceOpen}
-              onClose={() => setAttendanceOpen(false)}
-              cohort={cur}
-              onSave={saveAttendance}
-            />
-          </>
-        );
-      }}
-    </AsyncBoundary>
-  );
+function unique(values) {
+  return [...new Set(values.filter(Boolean).map(String))];
 }

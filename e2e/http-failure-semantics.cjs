@@ -33,7 +33,11 @@ const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:4175';
     }
     if (path.startsWith('teachers/')) {
       if (malformed) {
-        return route.fulfill({ status: 200, contentType: 'text/html', body: '<html>proxy fallback</html>' });
+        return route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<html>proxy fallback</html>',
+        });
       }
       if (outage) {
         return route.fulfill({
@@ -73,7 +77,11 @@ const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:4175';
   await page.goto(`${BASE}/people`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'People directory' }).waitFor();
   await page.getByRole('tab', { name: /Teachers/ }).waitFor();
-  if ((await page.getByRole('tab').count()) !== 1) {
+  const visibleTabs = await page.getByRole('tab').allTextContents();
+  if (
+    !visibleTabs.some((label) => /Teachers/.test(label)) ||
+    visibleTabs.some((label) => /Staff|Students/.test(label))
+  ) {
     throw new Error('403-protected directory sections were not hidden capability-by-capability');
   }
 

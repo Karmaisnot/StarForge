@@ -1,14 +1,23 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { Button, Card, Chip, Icon, ProgressBar, Segmented, Stepper, StarMark } from '@/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  Icon,
+  MotivationalHero,
+  ProgressBar,
+  Segmented,
+  Stepper,
+  StarMark,
+} from '@/ui';
 import { printerStatusTone } from '@/domain/models/print.js';
 import { useServices } from '@/hooks/useServices.js';
 import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import { plural } from '@/i18n/plural.js';
-import { isApiMode } from '@/data/http/apiConfig.js';
 import styles from './print.module.css';
 
 const PAGES_PER_COPY = 8;
@@ -29,6 +38,8 @@ function QuickPrint({ library, printers, onAdd }) {
   const [color, setColor] = useState('bw');
   const [side, setSide] = useState('2');
   const [uploadName, setUploadName] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(() => library.files?.[0] ?? null);
   const fileInputRef = useRef(null);
 
   const total = copies * PAGES_PER_COPY;
@@ -49,7 +60,10 @@ function QuickPrint({ library, printers, onAdd }) {
   };
 
   const addToQueue = () => {
-    const doc = source === 'upload' && uploadName ? uploadName : `${tt('print.quick')} · ${format}`;
+    const doc =
+      source === 'upload' && uploadName
+        ? uploadName
+        : (selectedFile?.filename ?? `${tt('print.quick')} · ${format}`);
     // No dedicated printer selector in this form: default to the first
     // non-locked printer so the job targets a real, available device.
     const target = (printers ?? []).find((p) => p.status !== 'locked') ?? (printers ?? [])[0];
@@ -61,131 +75,289 @@ function QuickPrint({ library, printers, onAdd }) {
       printer: target?.name ?? 'HP LaserJet',
       icon: 'doc',
       side,
+      libraryFileId: source === 'library' ? selectedFile?.id : undefined,
     });
     toast(`${total} ${plural(locale, 'pages', total)} ${tt('print.queueToast')}`, 'success');
   };
 
   return (
-    <Card title={tt('print.quick')}>
-      <div className={styles.quick}>
-        <div className={styles.source}>
-          <button
-            className={`${styles.sourceBtn} ${source === 'library' ? styles.sourceOn : ''}`}
-            onClick={() => setSource('library')}
-          >
-            <Icon name="folder" size={18} />
-            <div>
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>{tt('print.fromLibrary')}</div>
-              <div style={{ fontSize: 10, color: 'var(--sf-muted)' }}>
-                {library.fileCount} {tt('print.files')}
-              </div>
-            </div>
-          </button>
-          <button
-            className={`${styles.sourceBtn} ${source === 'upload' ? styles.sourceOn : ''}`}
-            onClick={pickUpload}
-          >
-            <Icon name="upload" size={18} />
-            <div>
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>{tt('print.upload')}</div>
-              <div style={{ fontSize: 10, color: 'var(--sf-muted)' }}>{tt('print.uploadHint')}</div>
-            </div>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-        </div>
-        {source === 'upload' && uploadName && (
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--sf-primary)',
-              fontWeight: 600,
-              wordBreak: 'break-all',
-            }}
-          >
-            {tt('print.fileChosen')} · {uploadName}
-          </div>
-        )}
-
-        <div className={styles.formRow}>
-          <span className={styles.formL}>{tt('print.copies')}</span>
-          <Stepper value={copies} min={1} onChange={setCopies} />
-        </div>
-        <div className={styles.formRow}>
-          <span className={styles.formL}>{tt('print.format')}</span>
-          <Segmented
-            value={format}
-            onChange={setFormat}
-            options={[
-              { value: 'A4', label: 'A4' },
-              { value: 'A5', label: 'A5' },
-              { value: 'A3', label: 'A3' },
-            ]}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <span className={styles.formL}>{tt('print.color')}</span>
-          <Segmented
-            value={color}
-            onChange={setColor}
-            options={[
-              { value: 'bw', label: tt('print.bw') },
-              { value: 'color', label: tt('print.colorful') },
-            ]}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <span className={styles.formL}>{tt('print.side')}</span>
-          <Segmented
-            value={side}
-            onChange={setSide}
-            options={[
-              { value: '1', label: '1 ↕' },
-              { value: '2', label: '2 ↔' },
-            ]}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <span className={styles.formL}>{tt('print.time')}</span>
-          <span style={{ fontSize: 12, color: 'var(--sf-primary)', fontWeight: 600 }}>
-            {tt('print.timeValue')}
-          </span>
-        </div>
-
-        <div className={styles.sum}>
-          <div className={styles.sumRow}>
-            <span
-              style={{
-                fontSize: 10,
-                opacity: 0.7,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                fontWeight: 600,
+    <>
+      <Card title={tt('print.quick')}>
+        <div className={styles.quick}>
+          <div className={styles.source}>
+            <button
+              className={`${styles.sourceBtn} ${source === 'library' ? styles.sourceOn : ''}`}
+              onClick={() => {
+                setSource('library');
+                setLibraryOpen(true);
               }}
             >
-              {tt('print.final')}
+              <Icon name="folder" size={18} />
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{tt('print.fromLibrary')}</div>
+                <div style={{ fontSize: 10, color: 'var(--sf-muted)' }}>
+                  {library.fileCount} {tt('print.files')}
+                </div>
+              </div>
+            </button>
+            <button
+              className={`${styles.sourceBtn} ${source === 'upload' ? styles.sourceOn : ''}`}
+              onClick={pickUpload}
+            >
+              <Icon name="upload" size={18} />
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{tt('print.upload')}</div>
+                <div style={{ fontSize: 10, color: 'var(--sf-muted)' }}>
+                  {tt('print.uploadHint')}
+                </div>
+              </div>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+          </div>
+          {source === 'library' && selectedFile && (
+            <button
+              type="button"
+              className={styles.selectedLibraryFile}
+              onClick={() => setLibraryOpen(true)}
+            >
+              <span>
+                <Icon name="doc" size={16} />
+              </span>
+              <span>
+                <strong>{selectedFile.filename}</strong>
+                <small>
+                  {selectedFile.type} · {selectedFile.size}
+                </small>
+              </span>
+              <Icon name="chevR" size={14} />
+            </button>
+          )}
+          {source === 'upload' && uploadName && (
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--sf-primary)',
+                fontWeight: 600,
+                wordBreak: 'break-all',
+              }}
+            >
+              {tt('print.fileChosen')} · {uploadName}
+            </div>
+          )}
+
+          <div className={styles.formRow}>
+            <span className={styles.formL}>{tt('print.copies')}</span>
+            <Stepper value={copies} min={1} onChange={setCopies} />
+          </div>
+          <div className={styles.formRow}>
+            <span className={styles.formL}>{tt('print.format')}</span>
+            <Segmented
+              value={format}
+              onChange={setFormat}
+              options={[
+                { value: 'A4', label: 'A4' },
+                { value: 'A5', label: 'A5' },
+                { value: 'A3', label: 'A3' },
+              ]}
+            />
+          </div>
+          <div className={styles.formRow}>
+            <span className={styles.formL}>{tt('print.color')}</span>
+            <Segmented
+              value={color}
+              onChange={setColor}
+              options={[
+                { value: 'bw', label: tt('print.bw') },
+                { value: 'color', label: tt('print.colorful') },
+              ]}
+            />
+          </div>
+          <div className={styles.formRow}>
+            <span className={styles.formL}>{tt('print.side')}</span>
+            <Segmented
+              value={side}
+              onChange={setSide}
+              options={[
+                { value: '1', label: '1 ↕' },
+                { value: '2', label: '2 ↔' },
+              ]}
+            />
+          </div>
+          <div className={styles.formRow}>
+            <span className={styles.formL}>{tt('print.time')}</span>
+            <span style={{ fontSize: 12, color: 'var(--sf-primary)', fontWeight: 600 }}>
+              {tt('print.timeValue')}
             </span>
-            <StarMark size={20} color="var(--sf-accent)" />
           </div>
-          <div className="sf-mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
-            {copies} × {PAGES_PER_COPY} = {total} {plural(locale, 'pages', total)}
+
+          <div className={styles.sum}>
+            <div className={styles.sumRow}>
+              <span
+                style={{
+                  fontSize: 10,
+                  opacity: 0.7,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                }}
+              >
+                {tt('print.final')}
+              </span>
+              <StarMark size={20} color="var(--sf-accent)" />
+            </div>
+            <div className="sf-mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
+              {copies} × {PAGES_PER_COPY} = {total} {plural(locale, 'pages', total)}
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}>
+              {format} · {color === 'bw' ? tt('print.bw') : tt('print.colorful')} · {side}{' '}
+              {tt('print.sided')} · HP LaserJet
+            </div>
           </div>
-          <div style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}>
-            {format} · {color === 'bw' ? tt('print.bw') : tt('print.colorful')} · {side}{' '}
-            {tt('print.sided')} · HP LaserJet
-          </div>
+          <Button
+            variant="primary"
+            block
+            icon="arrowR"
+            iconRight
+            onClick={addToQueue}
+            disabled={source === 'library' && !selectedFile}
+          >
+            {tt('print.addQueue')}
+          </Button>
         </div>
-        <Button variant="primary" block icon="arrowR" iconRight onClick={addToQueue}>
-          {tt('print.addQueue')}
-        </Button>
-      </div>
-    </Card>
+      </Card>
+      {libraryOpen && (
+        <LibraryPicker
+          library={library}
+          selectedId={selectedFile?.id}
+          onClose={() => setLibraryOpen(false)}
+          onSelect={(file) => {
+            setSelectedFile(file);
+            setSource('library');
+            setLibraryOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function LibraryPicker({ library, selectedId, onClose, onSelect }) {
+  const { t, locale } = useT();
+  const [query, setQuery] = useState('');
+  const [type, setType] = useState('all');
+  const searchRef = useRef(null);
+  useEffect(() => {
+    searchRef.current?.focus();
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const files = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (library.files ?? []).filter(
+      (file) =>
+        (type === 'all' || file.type === type) &&
+        (!needle || file.filename.toLowerCase().includes(needle)),
+    );
+  }, [library.files, query, type]);
+  const labels = {
+    en: {
+      title: 'Choose from library',
+      subtitle: 'Search reusable teaching files',
+      all: 'All files',
+      empty: 'No matching files',
+    },
+    ru: {
+      title: 'Выбрать из библиотеки',
+      subtitle: 'Найдите готовые учебные материалы',
+      all: 'Все файлы',
+      empty: 'Файлы не найдены',
+    },
+    uz: {
+      title: 'Kutubxonadan tanlash',
+      subtitle: 'Tayyor o‘quv materiallarini toping',
+      all: 'Barcha fayllar',
+      empty: 'Fayl topilmadi',
+    },
+  }[locale];
+  const types = [...new Set((library.files ?? []).map((file) => file.type))];
+
+  return (
+    <div className={styles.libraryBackdrop} onMouseDown={onClose}>
+      <section
+        className={styles.libraryDrawer}
+        role="dialog"
+        aria-modal="true"
+        aria-label={labels.title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <h2>{labels.title}</h2>
+            <p>{labels.subtitle}</p>
+          </div>
+          <button onClick={onClose} aria-label={t('common.close')}>
+            <Icon name="x" size={18} />
+          </button>
+        </header>
+        <div className={styles.libraryTools}>
+          <label>
+            <Icon name="search" size={15} />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('shell.searchAll')}
+            />
+          </label>
+          <select value={type} onChange={(event) => setType(event.target.value)}>
+            <option value="all">{labels.all}</option>
+            {types.map((value) => (
+              <option key={value} value={value}>
+                {value.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={styles.libraryList}>
+          {files.map((file) => (
+            <button
+              key={file.id}
+              data-selected={selectedId === file.id ? '1' : '0'}
+              onClick={() => onSelect(file)}
+            >
+              <span className={styles.fileMark}>
+                <Icon name={file.type === 'pdf' ? 'doc' : 'folder'} size={18} />
+              </span>
+              <span>
+                <strong>{file.filename}</strong>
+                <small>
+                  {file.type.toUpperCase()} · {file.size} · {file.pages} pages
+                </small>
+                <em>
+                  {file.owner} · {file.updatedAt}
+                </em>
+              </span>
+              {selectedId === file.id ? (
+                <Icon name="check" size={16} />
+              ) : (
+                <Icon name="arrowR" size={14} />
+              )}
+            </button>
+          ))}
+          {!files.length && <div className={styles.libraryEmpty}>{labels.empty}</div>}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -206,7 +378,8 @@ export function PrintPage() {
   );
   const [extraJobs, setExtraJobs] = useState([]);
   const [cancelled, setCancelled] = useState({});
-  const writesEnabled = !isApiMode();
+  // The local Fastify API persists the complete queue, including cancellation.
+  const writesEnabled = true;
 
   const cancelJob = async (job) => {
     // Optimistic: drop it from the visible queue immediately.
@@ -239,6 +412,7 @@ export function PrintPage() {
         doc: job.doc,
         copies: job.copies,
         size: job.size,
+        libraryFileId: job.libraryFileId,
       });
       // Server now owns this job; drop the optimistic stub and refetch.
       setExtraJobs((list) => list.filter((j) => j.id !== tempId));
@@ -283,6 +457,16 @@ export function PrintPage() {
                     </Button>
                   ) : null
                 }
+              />
+
+              <MotivationalHero
+                context="print"
+                compact
+                className={styles.printHero}
+                eyebrow={tt('print.title')}
+                title={tt('print.quick')}
+                refreshKey={reloadKey}
+                meta={`${d.library.fileCount} ${tt('print.files')} · ${jobs.length} ${tt('print.queueWord')}`}
               />
 
               <div className={styles.grid}>

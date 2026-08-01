@@ -79,6 +79,7 @@ export function mapThread(thread: MgmtThread, activity: ThreadActivity, now: Dat
     online: thread.online,
     pinned: thread.pinned,
     channel: thread.channel,
+    archived: Boolean(thread.archivedAt),
   };
 }
 

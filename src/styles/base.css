@@ -63,6 +63,19 @@ button {
   background: var(--sf-muted);
 }
 
+/* Respect the operating-system motion preference across every page. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Shared typographic utilities (used across many components) */
 .sf-mono {
   font-family: var(--sf-font-mono);

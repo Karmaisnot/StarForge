@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { isApiMode } from '@/data/http/apiConfig.js';
 import { getToken, login } from '@/data/http/authToken.js';
 import { StarMark } from '@/ui';
 import { useT } from '@/hooks/useT.js';
 import styles from './login.module.css';
 
-/** Tenant-aware sign-in surface used only when live API mode is enabled. */
+/** Tenant-aware sign-in surface. */
 export function LoginPage() {
   const { t } = useT();
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (!isApiMode()) return <Navigate to="/today" replace />;
   if (getToken()) return <Navigate to={location.state?.from?.pathname ?? '/today'} replace />;
 
   const submit = async (event) => {

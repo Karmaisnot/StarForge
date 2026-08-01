@@ -32,7 +32,12 @@ export class AuthService {
       platform: device.platform || 'web',
     });
 
-    return { sub: teacher.id, academyId: teacher.academyId, sid: session.id };
+    return {
+      sub: teacher.id,
+      academyId: teacher.academyId,
+      sid: session.id,
+      roleKey: teacher.roleKey,
+    };
   }
 
   async logout(sessionId: string, teacherId: string): Promise<void> {

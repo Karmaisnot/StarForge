@@ -1,9 +1,13 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Icon, StarMark, AiBadge } from '@/ui';
 import { useT } from '@/hooks/useT.js';
 import { PRIMARY_NAV, SECONDARY_NAV, visibleNav } from './navConfig.js';
 import { NavItem } from './NavItem.jsx';
 import styles from './AppShell.module.css';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * @param {{ teacher: object|null, badges: object, aiUsage: object|null,
@@ -13,30 +17,85 @@ export function Sidebar({ teacher, badges = {}, aiUsage, open, onClose }) {
   const navigate = useNavigate();
   const { t } = useT();
   const pct = aiUsage?.percent ?? 0;
+  const drawerRef = useRef(null);
+  const closeRef = useRef(null);
+  const closeHandlerRef = useRef(onClose);
+  const previouslyFocusedRef = useRef(null);
+  closeHandlerRef.current = onClose;
+
+  // The mobile sidebar is a modal drawer. Keep keyboard focus inside it,
+  // support Escape, and return focus to the opener after it closes.
+  useEffect(() => {
+    if (!open) return undefined;
+    const drawer = drawerRef.current;
+    previouslyFocusedRef.current = document.activeElement;
+    const focusables = () => (drawer ? [...drawer.querySelectorAll(FOCUSABLE)] : []);
+    const frame = requestAnimationFrame(() => closeRef.current?.focus());
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeHandlerRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) {
+        event.preventDefault();
+        drawer?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown);
+      const previouslyFocused = previouslyFocusedRef.current;
+      if (previouslyFocused instanceof HTMLElement && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
+    };
+  }, [open]);
 
   return (
     <aside
+      ref={drawerRef}
+      id="main-navigation"
       className={`${styles.side} ${open ? styles.open : ''}`}
       role={open ? 'dialog' : undefined}
       aria-modal={open ? true : undefined}
       aria-label={open ? t('shell.menu') : undefined}
+      tabIndex={open ? -1 : undefined}
     >
       <div className={styles.sideInner}>
-        <div
-          className={styles.brand}
-          onClick={() => {
-            navigate('/today');
-            onClose();
-          }}
-        >
-          <StarMark size={28} color="var(--sf-primary)" />
-          <div className={styles.brandText}>
-            <div className={styles.brandName}>
-              StarForge<span style={{ color: 'var(--sf-muted)', fontWeight: 500 }}> · EDU</span>
-            </div>
-            <div className={styles.brandSub}>{teacher?.branch ?? t('cohorts.branch')}</div>
-          </div>
+        <div className={styles.brand}>
           <button
+            type="button"
+            className={styles.brandLink}
+            onClick={() => {
+              navigate('/today');
+              onClose();
+            }}
+          >
+            <StarMark size={28} color="var(--sf-primary)" />
+            <div className={styles.brandText}>
+              <div className={styles.brandName}>
+                StarForge<span style={{ color: 'var(--sf-muted)', fontWeight: 500 }}> · EDU</span>
+              </div>
+              <div className={styles.brandSub}>{teacher?.branch ?? t('cohorts.branch')}</div>
+            </div>
+          </button>
+          <button
+            ref={closeRef}
+            type="button"
             className={styles.sideClose}
             onClick={(e) => {
               e.stopPropagation();

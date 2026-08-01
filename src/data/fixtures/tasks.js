@@ -10,7 +10,14 @@ const PROJ = {
   consult: { uz: 'Konsult.', ru: 'Консульт.', en: 'Consult.' },
 };
 
-export const tasksFixture = [
+const dueAt = (days, hour = 18) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+};
+
+const rawTasksFixture = [
   { id: 1, title: { uz: 'May oyi yakuniy hisobotini topshirish', ru: 'Сдать итоговый отчёт за май', en: 'Submit May final report' }, priority: 'P1', state: 'doing', project: PROJ.report, projectColor: 'var(--sf-primary)', deadline: { uz: 'Erta · 18:00', ru: 'Завтра · 18:00', en: 'Tomorrow · 18:00' }, urgent: true, fromMgmt: true, subtasks: { done: 2, total: 4 }, assigner: 'Karimova R.' },
   { id: 2, title: { uz: 'Slaydlarni yangilash · Kvadrat tenglamalar', ru: 'Обновить слайды · Квадратные уравнения', en: 'Update slides · Quadratic equations' }, priority: 'P2', state: 'todo', project: PROJ.materials, projectColor: 'var(--sf-accent)', deadline: { uz: 'Pen · 23:59', ru: 'Чт · 23:59', en: 'Thu · 23:59' }, urgent: false, fromMgmt: false, subtasks: { done: 0, total: 3 }, assigner: ASSIGNER_ME, mine: true },
   { id: 3, title: { uz: "So'rovnoma · AI sifat baholash", ru: 'Опрос · оценка качества AI', en: 'Survey · AI quality rating' }, priority: 'P2', state: 'doing', project: PROJ.survey, projectColor: 'var(--sf-ai)', deadline: '22.05', urgent: false, fromMgmt: true, subtasks: { done: 1, total: 1 }, assigner: { uz: 'Metodist', ru: 'Методист', en: 'Methodist' } },
@@ -20,6 +27,12 @@ export const tasksFixture = [
   { id: 7, title: { uz: 'Dars rejasi · Logarifmlar', ru: 'План урока · Логарифмы', en: 'Lesson plan · Logarithms' }, priority: 'P3', state: 'doing', project: PROJ.materials, projectColor: 'var(--sf-accent)', deadline: '23.05', urgent: false, fromMgmt: false, subtasks: { done: 1, total: 5 }, assigner: ASSIGNER_ME, mine: true },
   { id: 8, title: { uz: '9-B uchun konsultatsiya rejasi', ru: 'План консультации для 9-B', en: 'Consultation plan for 9-B' }, priority: 'P3', state: 'review', project: PROJ.consult, projectColor: 'var(--sf-primary)', deadline: '24.05', urgent: false, fromMgmt: false, subtasks: null, assigner: ASSIGNER_ME, mine: true },
 ];
+
+export const tasksFixture = rawTasksFixture.map((task, position) => ({
+  ...task,
+  position,
+  deadlineAt: dueAt(position - 1, position % 2 ? 18 : 12),
+}));
 
 export const taskColumnsFixture = [
   { id: 'todo', label: { uz: 'Boshlanmagan', ru: 'Не начато', en: 'To do' }, color: 'var(--sf-muted)' },

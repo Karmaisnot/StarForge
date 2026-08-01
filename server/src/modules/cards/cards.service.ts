@@ -1,4 +1,4 @@
-import { BusinessRuleError, NotFoundError } from '../../shared/errors';
+import { BusinessRuleError, ForbiddenError, NotFoundError } from '../../shared/errors';
 import type { AuthContext } from '../../http/plugins/auth';
 import type { CardsRepository } from './cards.repository';
 import type { IssueCardInput } from './cards.schemas';
@@ -103,5 +103,42 @@ export class CardsService {
     });
 
     return mapRecentCard(card);
+  }
+
+  /**
+   * Validate a physical student code and write a durable security audit event.
+   * The scanner is role-protected server-side too, so a hidden UI control is
+   * never the only permission boundary.
+   */
+  async scan(ctx: AuthContext, code: string) {
+    if (ctx.roleKey !== 'security') throw new ForbiddenError();
+
+    const normalized = code.trim();
+    const student = await this.repo.findStudentByCode(normalized, ctx.academyId);
+    await this.repo.recordScan({
+      academyId: ctx.academyId,
+      studentId: student?.id,
+      scannedById: ctx.teacherId,
+      code: normalized,
+      valid: Boolean(student),
+    });
+
+    if (!student) {
+      return {
+        scanId: null,
+        valid: false,
+        error: 'Access code was not found',
+        scannedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      scanId: student.id,
+      valid: true,
+      student: student.name,
+      cardType: 'Student access',
+      scannedAt: new Date().toISOString(),
+      attendanceLesson: null,
+    };
   }
 }

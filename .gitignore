@@ -12,6 +12,8 @@ dist-ssr
 /screenshots/
 /uploads/
 /.playwright-cli/
+/test-results/
+/playwright-report/
 
 # local env (keep machine-local; copy from .env.example if added)
 .env

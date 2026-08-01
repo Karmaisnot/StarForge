@@ -29,6 +29,8 @@ import { DashboardRepository } from './modules/dashboard/dashboard.repository';
 import { DashboardService } from './modules/dashboard/dashboard.service';
 import { NavigationRepository } from './modules/navigation/navigation.repository';
 import { NavigationService } from './modules/navigation/navigation.service';
+import { WorkspaceRepository } from './modules/workspaces/workspace.repository';
+import { WorkspaceService } from './modules/workspaces/workspace.service';
 
 /**
  * The application service registry. The HTTP layer depends only on these
@@ -48,6 +50,7 @@ export interface Services {
   materials: MaterialService;
   dashboard: DashboardService;
   navigation: NavigationService;
+  workspaces: WorkspaceService;
 }
 
 export interface Container {
@@ -77,6 +80,7 @@ export function createContainer(config: AppConfig, db: Db): Container {
   const materialRepo = new MaterialRepository(db);
   const dashboardRepo = new DashboardRepository(db);
   const navigationRepo = new NavigationRepository(db);
+  const workspaceRepo = new WorkspaceRepository(db);
 
   // Domain services
   const account = new AccountService(accountRepo, sessionRepo);
@@ -124,6 +128,7 @@ export function createContainer(config: AppConfig, db: Db): Container {
     materials: new MaterialService(materialRepo),
     dashboard,
     navigation: new NavigationService(navigationRepo),
+    workspaces: new WorkspaceService(workspaceRepo),
   };
 
   return { config, db, services };

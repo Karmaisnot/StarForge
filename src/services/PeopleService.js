@@ -7,4 +7,9 @@ export class PeopleService {
   getDirectory() {
     return this.peopleRepo.getDirectory();
   }
+
+  /** @param {{ids?:string[]}} filters */
+  exportStudents(filters = {}) {
+    return this.peopleRepo.exportStudents(filters);
+  }
 }

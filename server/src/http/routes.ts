@@ -13,6 +13,7 @@ import { notificationRoutes } from '../modules/notifications/notification.routes
 import { materialRoutes } from '../modules/materials/material.routes';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes';
 import { navigationRoutes } from '../modules/navigation/navigation.routes';
+import { workspaceRoutes } from '../modules/workspaces/workspace.routes';
 
 /**
  * Mount every domain's routes under the /api prefix. Each domain exposes a
@@ -36,6 +37,7 @@ export async function registerRoutes(app: FastifyInstance, container: Container)
       await api.register(materialRoutes(services.materials));
       await api.register(dashboardRoutes(services.dashboard));
       await api.register(navigationRoutes(services.navigation));
+      await api.register(workspaceRoutes(services.workspaces));
     },
     { prefix: '/api' },
   );

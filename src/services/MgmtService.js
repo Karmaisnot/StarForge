@@ -21,4 +21,12 @@ export class MgmtService {
   markRead(threadId) {
     return this.mgmtRepo.markRead(threadId);
   }
+  /** @param {number|string} threadId @param {boolean} archived */
+  archiveThread(threadId, archived) {
+    return this.mgmtRepo.archiveThread(threadId, archived);
+  }
+  /** @param {number|string} threadId */
+  deleteThread(threadId) {
+    return this.mgmtRepo.deleteThread(threadId);
+  }
 }

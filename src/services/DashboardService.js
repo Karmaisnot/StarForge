@@ -3,7 +3,7 @@ export class DashboardService {
   constructor({ dashboardRepo }) {
     this.dashboardRepo = dashboardRepo;
   }
-  getToday() {
-    return this.dashboardRepo.getToday();
+  getToday(range = '7d') {
+    return this.dashboardRepo.getToday(range);
   }
 }

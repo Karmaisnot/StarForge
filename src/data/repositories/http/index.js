@@ -4,6 +4,7 @@
 import { getLocale } from '@/i18n/locale.js';
 import { ApiError } from '@/data/http/apiError.js';
 import { httpClient } from '@/data/http/httpClient.js';
+import { createStudentWorkbookPayload } from '@/data/spreadsheet.js';
 import {
   IAccountRepository,
   ICohortRepository,
@@ -492,6 +493,34 @@ function mapForm(form) {
   };
 }
 
+function mapFormQuestion(field, index) {
+  const rawKind = String(field.field_type ?? field.type ?? 'text').toLowerCase();
+  const kind =
+    rawKind.includes('rating') || rawKind.includes('scale')
+      ? 'rating'
+      : rawKind.includes('checkbox') || rawKind.includes('multi')
+        ? 'multi'
+        : rawKind.includes('radio') || rawKind.includes('select') || rawKind.includes('choice')
+          ? 'single'
+          : rawKind.includes('bool')
+            ? 'boolean'
+            : rawKind.includes('textarea') || rawKind.includes('long')
+              ? 'longText'
+              : 'text';
+  const options = asList(field.options ?? field.choices).map((option, optionIndex) => ({
+    value: String(option?.value ?? option?.id ?? optionIndex),
+    label: option?.label ?? option?.name ?? option?.title ?? String(option),
+  }));
+  return {
+    id: String(field.id ?? `field-${index}`),
+    kind,
+    prompt: field.label ?? field.question ?? field.title ?? `${copy().form} ${index + 1}`,
+    description: field.help_text ?? field.description ?? '',
+    required: Boolean(field.required ?? field.is_required),
+    ...(options.length ? { options } : {}),
+  };
+}
+
 function mapThread(thread) {
   return {
     id: String(thread.id),
@@ -635,6 +664,74 @@ export class HttpCohortRepository extends ICohortRepository {
     return asList(members).map((member) => mapRosterMember(member, attendanceByStudent));
   }
 
+  async getWorkspace(cohortId, { from, to } = {}) {
+    const windowFrom = from || new Date(Date.now() - 45 * 86400000).toISOString();
+    const windowTo = to || new Date(Date.now() + 45 * 86400000).toISOString();
+    const [cohort, roster, lessonPayload] = await Promise.all([
+      this.getById(cohortId),
+      this.getRoster(cohortId),
+      optional(
+        () =>
+          httpClient.get(
+            `schedule/lessons/?cohort=${encodeURIComponent(cohortId)}&date_from=${encodeURIComponent(windowFrom)}&date_to=${encodeURIComponent(windowTo)}&page_size=100`,
+          ),
+        [],
+      ),
+    ]);
+    const lessons = asList(lessonPayload)
+      .filter((lesson) => lesson.status !== 'cancelled')
+      .map((lesson) => ({
+        id: String(lesson.id),
+        title: lesson.title || lesson.lesson_type_name || copy().lesson,
+        startsAt: lesson.starts_at,
+        endsAt: lesson.ends_at,
+        type: lesson.lesson_type || lesson.mode || 'main',
+        typeLabel: lesson.lesson_type_name || lesson.lesson_type || copy().lesson,
+        teacherName: lesson.teacher_name || lesson.teacher_display_name || copy().teacher,
+        room: lesson.room_name || '',
+      }))
+      .sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)));
+    const now = Date.now();
+    const upcomingLessons = lessons.filter((lesson) => new Date(lesson.startsAt).getTime() >= now);
+    const lastLesson = [...lessons]
+      .reverse()
+      .find((lesson) => new Date(lesson.startsAt).getTime() < now);
+    const instructors = [
+      ...new Map(
+        lessons.map((lesson) => [
+          lesson.teacherName,
+          {
+            id: lesson.teacherName,
+            name: lesson.teacherName,
+            role: lesson.type,
+            roleLabel: lesson.typeLabel,
+            isYou: false,
+            online: false,
+          },
+        ]),
+      ).values(),
+    ];
+    return {
+      revision: 1,
+      instructors,
+      nextLesson: upcomingLessons[0] ?? null,
+      upcomingLessons: upcomingLessons.slice(0, 6),
+      lastLesson: lastLesson
+        ? { ...lastLesson, homework: null, attendance: cohort.attendance }
+        : null,
+      attendanceHistory: [],
+      progression: {
+        mode: 'level',
+        current: cohort.level,
+        next: cohort.level,
+        startedAt: '',
+        eligible: false,
+        readiness: cohort.attendance,
+      },
+      rosterCount: roster.length,
+    };
+  }
+
   async create(draft) {
     const branch = Number(draft?.branch);
     const startDate = draft?.start_date ?? draft?.startDate;
@@ -682,6 +779,13 @@ export class HttpCohortRepository extends ICohortRepository {
       status: entry.present ? 'present' : 'absent',
     }));
     return httpClient.post(`attendance/lessons/${lesson.id}/mark/`, payload);
+  }
+
+  async advance() {
+    throw clientContractError(
+      'cohorts/{id}/advance/',
+      'The supplied API does not expose forced cohort progression.',
+    );
   }
 }
 
@@ -814,6 +918,12 @@ export class HttpTaskRepository extends ITaskRepository {
     return mapTask(
       await httpClient.post(`tasks/${id}/transition/`, { status: apiTaskStatus(state) }),
     );
+  }
+
+  // The legacy remote API can change status but has no stable ordering contract.
+  // Preserve the state move and let its server-defined order remain authoritative.
+  async move(id, state, _targetIndex) {
+    return this.setState(id, state);
   }
 
   async create(draft) {
@@ -1122,6 +1232,8 @@ export class HttpPrintRepository extends IPrintRepository {
 }
 
 export class HttpSurveyRepository extends ISurveyRepository {
+  #drafts = new Map();
+
   async listActive() {
     const forms = asList(await httpClient.get('forms/?status=published&page_size=100'));
     return forms.map(mapForm);
@@ -1133,11 +1245,22 @@ export class HttpSurveyRepository extends ISurveyRepository {
     return Promise.resolve([]);
   }
 
-  async submit() {
-    throw clientContractError(
-      'forms/{id}/submit/',
-      'Forms have dynamic fields. The current fixed rating/comment modal must be replaced with a renderer for form_fields before submission is enabled.',
-    );
+  async getDetail(id) {
+    const form = await httpClient.get(`forms/${id}/`);
+    return {
+      ...mapForm(form),
+      questions: asList(form.form_fields).map(mapFormQuestion),
+      draft: this.#drafts.get(String(id)) ?? { answers: {}, progress: 0 },
+    };
+  }
+
+  saveDraft(id, input) {
+    this.#drafts.set(String(id), input);
+    return Promise.resolve({ id, ...input });
+  }
+
+  submit(id, input) {
+    return httpClient.post(`forms/${id}/submit/`, { answers: input.answers ?? {} });
   }
 
   async skip() {
@@ -1188,6 +1311,20 @@ export class HttpMgmtRepository extends IMgmtRepository {
 
   markRead(threadId) {
     return httpClient.post(`messaging/threads/${threadId}/read/`, {});
+  }
+
+  async archiveThread() {
+    throw clientContractError(
+      'messaging/threads/{id}/',
+      'The supplied messaging API does not expose thread archiving.',
+    );
+  }
+
+  async deleteThread() {
+    throw clientContractError(
+      'messaging/threads/{id}/',
+      'The supplied messaging API does not expose conversation deletion.',
+    );
   }
 }
 
@@ -1548,17 +1685,17 @@ function mapDirectoryPerson(person, kind) {
       ? 'student'
       : kind === 'parent'
         ? 'parent'
-      : kind === 'teacher'
-        ? 'teacher'
-        : membership.role || membership.account_type_slug || membership.account_kind || 'staff';
+        : kind === 'teacher'
+          ? 'teacher'
+          : membership.role || membership.account_type_slug || membership.account_kind || 'staff';
   const roleName =
     kind === 'student'
       ? copy().student
       : kind === 'parent'
         ? copy().parent
-      : kind === 'teacher'
-        ? copy().teacher
-        : membership.account_type_name || String(roleKey).replaceAll('_', ' ');
+        : kind === 'teacher'
+          ? copy().teacher
+          : membership.account_type_name || String(roleKey).replaceAll('_', ' ');
   return {
     id: `${kind}-${person.id}`,
     sourceId: person.id,
@@ -1588,24 +1725,31 @@ function mapDirectoryPerson(person, kind) {
 
 export class HttpPeopleRepository extends IPeopleRepository {
   async getDirectory() {
-    const [staff, teachers, students, parents] = await Promise.all([
-      capability(() => httpClient.get('org/staff/?page_size=100&ordering=first_name')),
-      capability(() => httpClient.get('teachers/?page_size=100&ordering=first_name')),
+    const [students, parents] = await Promise.all([
       capability(() => httpClient.get('students/?page_size=100&ordering=first_name')),
       capability(() => httpClient.get('parents/?page_size=100&ordering=first_name')),
     ]);
     return {
       capabilities: {
-        staff: staff.available,
-        teachers: teachers.available,
+        staff: false,
+        teachers: false,
         students: students.available,
         parents: parents.available,
       },
-      staff: asList(staff.data).map((person) => mapDirectoryPerson(person, 'staff')),
-      teachers: asList(teachers.data).map((person) => mapDirectoryPerson(person, 'teacher')),
+      staff: [],
+      teachers: [],
       students: asList(students.data).map((person) => mapDirectoryPerson(person, 'student')),
       parents: asList(parents.data).map((person) => mapDirectoryPerson(person, 'parent')),
     };
+  }
+
+  async exportStudents({ ids = [] } = {}) {
+    const directory = await this.getDirectory();
+    const allowed = new Set(ids.map(String));
+    const students = allowed.size
+      ? directory.students.filter((student) => allowed.has(String(student.id)))
+      : directory.students;
+    return createStudentWorkbookPayload(students);
   }
 }
 
@@ -1721,26 +1865,35 @@ function mapPlacement(test) {
 export class HttpAcademicRepository extends IAcademicRepository {
   async getWorkspace() {
     const { from, to } = academicWindow();
-    const [schedule, attendance, assignments, exams, grades, risks, achievements, reports, placement] =
-      await Promise.all([
-        capability(() =>
-          httpClient.get(
-            `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200`,
-          ),
+    const [
+      schedule,
+      attendance,
+      assignments,
+      exams,
+      grades,
+      risks,
+      achievements,
+      reports,
+      placement,
+    ] = await Promise.all([
+      capability(() =>
+        httpClient.get(
+          `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200`,
         ),
-        capability(() =>
-          httpClient.get(
-            `attendance/records/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200&ordering=-marked_at`,
-          ),
+      ),
+      capability(() =>
+        httpClient.get(
+          `attendance/records/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200&ordering=-marked_at`,
         ),
-        capability(() => httpClient.get('assignments/?page_size=100&ordering=-due_at')),
-        capability(() => httpClient.get('academics/exams/?page_size=100&ordering=-exam_date')),
-        capability(() => httpClient.get('academics/grades/?page_size=100&ordering=-computed_at')),
-        capability(() => httpClient.get('intelligence/risk/')),
-        capability(() => httpClient.get('achievements/?page_size=100&ordering=-created_at')),
-        capability(() => httpClient.get('reports/?page_size=100&ordering=key')),
-        capability(() => httpClient.get('placement/tests/?page_size=100&ordering=-created_at')),
-      ]);
+      ),
+      capability(() => httpClient.get('assignments/?page_size=100&ordering=-due_at')),
+      capability(() => httpClient.get('academics/exams/?page_size=100&ordering=-exam_date')),
+      capability(() => httpClient.get('academics/grades/?page_size=100&ordering=-computed_at')),
+      capability(() => httpClient.get('intelligence/risk/')),
+      capability(() => httpClient.get('achievements/?page_size=100&ordering=-created_at')),
+      capability(() => httpClient.get('reports/?page_size=100&ordering=key')),
+      capability(() => httpClient.get('placement/tests/?page_size=100&ordering=-created_at')),
+    ]);
 
     return {
       capabilities: {
@@ -1855,10 +2008,17 @@ export class HttpOperationsRepository extends IOperationsRepository {
     const profile = mapTeacher(await httpClient.get('users/me/'));
     const role = profile.roleKey;
     const forRoles = (roles, load) =>
-      roles.includes(role)
-        ? capability(load)
-        : Promise.resolve({ available: false, data: [] });
-    const allStaff = ['teacher', 'accountant', 'cashier', 'librarian', 'security', 'it', 'registrar', 'support'];
+      roles.includes(role) ? capability(load) : Promise.resolve({ available: false, data: [] });
+    const allStaff = [
+      'teacher',
+      'accountant',
+      'cashier',
+      'librarian',
+      'security',
+      'it',
+      'registrar',
+      'support',
+    ];
     const commerce = ['accountant', 'cashier', 'registrar'];
     const [rewards, rules, procurement, sales, campaigns, audit, roles, permissions, overrides] =
       await Promise.all([
@@ -1866,8 +2026,12 @@ export class HttpOperationsRepository extends IOperationsRepository {
         forRoles(allStaff, () => httpClient.get('rulebook/rules/mine/?page_size=100')),
         forRoles(commerce, () => httpClient.get('procurement/?page_size=100&ordering=-created_at')),
         forRoles(commerce, () => httpClient.get('sales/?page_size=100&ordering=-created_at')),
-        forRoles(['registrar'], () => httpClient.get('campaigns/?page_size=100&ordering=-created_at')),
-        forRoles(['it', 'support'], () => httpClient.get('audit/?page_size=100&ordering=-created_at')),
+        forRoles(['registrar'], () =>
+          httpClient.get('campaigns/?page_size=100&ordering=-created_at'),
+        ),
+        forRoles(['it', 'support'], () =>
+          httpClient.get('audit/?page_size=100&ordering=-created_at'),
+        ),
         forRoles([], () => httpClient.get('access/roles/')),
         forRoles([], () => httpClient.get('access/permissions/')),
         forRoles([], () => httpClient.get('access/overrides/?page_size=100')),

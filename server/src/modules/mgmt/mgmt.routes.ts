@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { MgmtService } from './mgmt.service';
-import { CreateThreadSchema, SendMessageSchema } from './mgmt.schemas';
+import { ArchiveThreadSchema, CreateThreadSchema, SendMessageSchema } from './mgmt.schemas';
 
 /** Management-chat read + write routes. All require authentication. */
 export function mgmtRoutes(service: MgmtService) {
@@ -28,6 +28,17 @@ export function mgmtRoutes(service: MgmtService) {
     app.patch('/mgmt/threads/:threadId/read', auth, (req) => {
       const { threadId } = req.params as { threadId: string };
       return service.markRead(req.auth, threadId);
+    });
+
+    app.patch('/mgmt/threads/:threadId/archive', auth, (req) => {
+      const { threadId } = req.params as { threadId: string };
+      const body = ArchiveThreadSchema.parse(req.body);
+      return service.archiveThread(req.auth, threadId, body);
+    });
+
+    app.delete('/mgmt/threads/:threadId', auth, (req) => {
+      const { threadId } = req.params as { threadId: string };
+      return service.deleteThread(req.auth, threadId);
     });
   };
 }

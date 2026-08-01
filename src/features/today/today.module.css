@@ -405,6 +405,34 @@
   color: var(--sf-muted);
   font-size: 9px;
 }
+.sectionTools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.rangeControl {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  background: var(--sf-surface);
+}
+.rangeControl button {
+  min-width: 44px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--sf-muted);
+  background: transparent;
+  font: 700 10px var(--sf-font-mono);
+  cursor: pointer;
+}
+.rangeControl button[data-active='1'] {
+  color: var(--sf-primary-ink);
+  background: var(--sf-primary-soft);
+}
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -421,6 +449,19 @@
   background: var(--sf-surface);
   animation: metricEnter 0.38s ease both;
   animation-delay: calc(var(--metric-index) * 45ms);
+  color: var(--sf-ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.metricCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--sf-primary);
+  box-shadow: var(--sf-shadow-md);
 }
 @keyframes metricEnter {
   from {
@@ -487,6 +528,28 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.metricAction {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.metricCard:hover .metricAction,
+.metricCard:focus-visible .metricAction {
+  opacity: 1;
+  transform: none;
+}
 .analyticsGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
@@ -547,6 +610,16 @@
   stroke: var(--sf-primary);
   stroke-width: 2;
 }
+.chartPoint {
+  cursor: pointer;
+}
+.chartPoint:focus {
+  outline: none;
+}
+.chartPoint:focus circle {
+  stroke: var(--sf-accent);
+  stroke-width: 4;
+}
 .lineChart .currentPoint {
   fill: var(--sf-primary);
   stroke: var(--sf-surface);
@@ -562,6 +635,12 @@
   display: flex;
   align-items: baseline;
   gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 9px;
+  color: inherit;
+  background: var(--sf-surface-2);
+  cursor: pointer;
 }
 .chartCurrent span {
   color: var(--sf-muted);
@@ -607,6 +686,17 @@
   gap: 5px;
   min-width: 0;
   text-align: center;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 7px 7px 0 0;
+}
+.loadColumn:hover .loadTrack,
+.loadColumn:focus-visible .loadTrack {
+  background: var(--sf-primary-soft);
 }
 .loadColumn > span {
   color: var(--sf-ink-2);
@@ -638,6 +728,20 @@
 }
 .scoreRows {
   gap: 14px;
+}
+.scoreRow {
+  width: 100%;
+  padding: 7px;
+  border: 0;
+  border-radius: 9px;
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.scoreRow:hover {
+  background: var(--sf-surface-2);
 }
 .scoreRowTop {
   display: flex;
@@ -1228,6 +1332,131 @@
   font-style: normal;
 }
 
+/* Full-width AI conclusion replaces the low-value recent-cards strip. */
+.aiCenter {
+  position: relative;
+  margin-top: 30px;
+  padding: 28px;
+  overflow: hidden;
+  border: 1px solid var(--sf-ai-border);
+  border-radius: 22px;
+  background: var(--sf-ai-bg);
+  box-shadow: var(--sf-shadow-md);
+}
+.aiCenter::after {
+  content: 'AI';
+  position: absolute;
+  right: -15px;
+  top: -48px;
+  color: color-mix(in srgb, var(--sf-ai) 7%, transparent);
+  font: 900 180px/1 var(--sf-font-mono);
+  letter-spacing: -0.12em;
+  pointer-events: none;
+}
+.aiCenterHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+.aiCenterHeader h2 {
+  margin: 11px 0 5px;
+  font-family: var(--sf-font-display);
+  font-size: clamp(28px, 3vw, 42px);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.aiCenterHeader p {
+  max-width: 670px;
+  margin: 0;
+  color: var(--sf-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.aiActionsGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.aiActionCard {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: start;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--sf-ai-border) 72%, var(--sf-border));
+  border-radius: 15px;
+  color: var(--sf-ink);
+  background: color-mix(in srgb, var(--sf-surface) 88%, transparent);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.aiActionCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--sf-ai);
+  box-shadow: var(--sf-shadow-md);
+}
+.aiActionCard > svg {
+  grid-column: 3;
+  grid-row: 1;
+  margin-top: 11px;
+  color: var(--sf-ai);
+}
+.aiActionIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--sf-ai);
+  background: color-mix(in srgb, var(--sf-ai-border) 24%, transparent);
+}
+.aiActionCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.aiActionCopy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.aiActionCopy > span {
+  color: var(--sf-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.aiActionCopy small {
+  color: var(--sf-ink-2);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.confidence {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sf-muted);
+  font: 8px var(--sf-font-mono);
+  text-transform: uppercase;
+}
+.confidence b {
+  color: var(--sf-success);
+  font-size: 10px;
+}
+
 /* Widget controls */
 .widgetList {
   display: flex;
@@ -1303,8 +1532,18 @@
   .analyticsGrid {
     grid-template-columns: 1fr;
   }
+  .aiActionsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 720px) {
+  .aiCenter {
+    padding: 21px;
+  }
+  .aiCenterHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .surveyCopy {
     display: block;
   }
@@ -1312,6 +1551,12 @@
   .surveyCopy > span:last-child {
     display: block;
     margin-top: 3px;
+  }
+  .surveyCopy strong {
+    overflow: visible;
+    line-height: 1.3;
+    text-overflow: clip;
+    white-space: normal;
   }
   .surveyEyebrow {
     display: block;
@@ -1363,6 +1608,11 @@
   .sectionHeading small {
     display: block;
     margin-top: 6px;
+  }
+  .sectionTools {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-top: 9px;
   }
   .metricGrid {
     gap: 8px;

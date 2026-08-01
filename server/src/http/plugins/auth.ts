@@ -9,6 +9,7 @@ export interface AuthContext {
   teacherId: string;
   academyId: string;
   sessionId: string;
+  roleKey: string;
 }
 
 /** Shape of the signed JWT payload. */
@@ -16,6 +17,7 @@ export interface AuthTokenPayload {
   sub: string; // teacherId
   academyId: string;
   sid: string; // sessionId
+  roleKey: string;
 }
 
 declare module 'fastify' {
@@ -56,12 +58,15 @@ export const authPlugin = fp<{
     } catch {
       throw new UnauthorizedError();
     }
-    if (!payload.sub || !payload.academyId || !payload.sid) throw new UnauthorizedError();
+    if (!payload.sub || !payload.academyId || !payload.sid || !payload.roleKey) {
+      throw new UnauthorizedError();
+    }
     await opts.assertSessionActive(payload.sid, payload.sub);
     req.auth = {
       teacherId: payload.sub,
       academyId: payload.academyId,
       sessionId: payload.sid,
+      roleKey: payload.roleKey,
     };
   });
 });

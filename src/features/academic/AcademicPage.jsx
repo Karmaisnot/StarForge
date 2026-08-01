@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { Button, Chip, Icon, ProgressBar } from '@/ui';
+import { Button, Chip, Icon, MotivationalHero, ProgressBar } from '@/ui';
 import { useAcademicPage } from '@/hooks/data.js';
 import { useServices } from '@/hooks/useServices.js';
 import { useT } from '@/hooks/useT.js';
@@ -13,11 +14,27 @@ const TABS = ['overview', 'coursework', 'insights', 'resources'];
 export function AcademicPage() {
   const { academic } = useServices();
   const { t, locale } = useT();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get('tab');
+    return TABS.includes(requested) ? requested : 'overview';
+  });
   const [revision, setRevision] = useState(0);
   const pending = useRef(new Set());
   const state = useAcademicPage(revision);
+
+  useEffect(() => {
+    const requested = searchParams.get('tab');
+    if (TABS.includes(requested) && requested !== tab) setTab(requested);
+  }, [searchParams, tab]);
+
+  const selectTab = (next) => {
+    setTab(next);
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', next);
+    setSearchParams(params, { replace: true });
+  };
 
   const run = async (key, action, successKey) => {
     if (pending.current.has(key)) return;
@@ -38,7 +55,7 @@ export function AcademicPage() {
       {(data) => (
         <>
           <PageHeader title={t('academic.title')} subtitle={t('academic.subtitle')} />
-          <AcademicHero data={data} t={t} locale={locale} />
+          <AcademicHero data={data} t={t} locale={locale} refreshKey={revision} />
           <nav className={styles.tabs} aria-label={t('academic.title')} role="tablist">
             {TABS.map((key) => (
               <button
@@ -47,7 +64,7 @@ export function AcademicPage() {
                 role="tab"
                 aria-selected={tab === key}
                 data-on={tab === key ? '1' : '0'}
-                onClick={() => setTab(key)}
+                onClick={() => selectTab(key)}
               >
                 <Icon name={tabIcon(key)} size={15} />
                 {t(`academic.tabs.${key}`)}
@@ -73,7 +90,7 @@ export function AcademicPage() {
               }
             />
           )}
-          {tab === 'insights' && <Insights data={data} t={t} />}
+          {tab === 'insights' && <Insights data={data} t={t} locale={locale} />}
           {tab === 'resources' && (
             <Resources
               data={data}
@@ -93,11 +110,13 @@ export function AcademicPage() {
   );
 }
 
-function AcademicHero({ data, t, locale }) {
+function AcademicHero({ data, t, locale, refreshKey }) {
   const upcoming = useMemo(
     () =>
       data.schedule
-        .filter((lesson) => new Date(lesson.startsAt) >= new Date() && lesson.status !== 'cancelled')
+        .filter(
+          (lesson) => new Date(lesson.startsAt) >= new Date() && lesson.status !== 'cancelled',
+        )
         .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0],
     [data.schedule],
   );
@@ -109,35 +128,36 @@ function AcademicHero({ data, t, locale }) {
   ).length;
 
   return (
-    <section className={styles.hero}>
-      <div className={styles.heroCopy}>
-        <span className={styles.eyebrow}>
-          <i /> {t('academic.commandCenter')}
-        </span>
-        <h2>{upcoming ? t('academic.nextLessonReady') : t('academic.academicsClear')}</h2>
-        {upcoming ? (
-          <div className={styles.nextLesson}>
-            <time className="sf-mono">{formatTime(upcoming.startsAt, locale)}</time>
-            <span />
-            <div>
-              <strong>{upcoming.title}</strong>
-              <small>{[upcoming.cohort, upcoming.room].filter(Boolean).join(' · ')}</small>
-            </div>
+    <MotivationalHero
+      context="academic"
+      className={styles.motivationalHero}
+      eyebrow={t('academic.commandCenter')}
+      title={upcoming ? t('academic.nextLessonReady') : t('academic.academicsClear')}
+      refreshKey={refreshKey}
+      meta={!upcoming ? t('academic.academicsClearBody') : undefined}
+      actions={
+        <div className={styles.heroStats}>
+          <HeroStat value={data.schedule.length} label={t('academic.lessons')} />
+          <HeroStat
+            value={attendanceRate == null ? '—' : `${attendanceRate}%`}
+            label={t('academic.attendance')}
+          />
+          <HeroStat value={openAssignments} label={t('academic.activeAssignments')} />
+          <HeroStat value={data.risks.length} label={t('academic.studentsToReview')} tone="warn" />
+        </div>
+      }
+    >
+      {upcoming && (
+        <div className={styles.nextLesson}>
+          <time className="sf-mono">{formatTime(upcoming.startsAt, locale)}</time>
+          <span />
+          <div>
+            <strong>{upcoming.title}</strong>
+            <small>{[upcoming.cohort, upcoming.room].filter(Boolean).join(' · ')}</small>
           </div>
-        ) : (
-          <p>{t('academic.academicsClearBody')}</p>
-        )}
-      </div>
-      <div className={styles.heroStats}>
-        <HeroStat value={data.schedule.length} label={t('academic.lessons')} />
-        <HeroStat
-          value={attendanceRate == null ? '—' : `${attendanceRate}%`}
-          label={t('academic.attendance')}
-        />
-        <HeroStat value={openAssignments} label={t('academic.activeAssignments')} />
-        <HeroStat value={data.risks.length} label={t('academic.studentsToReview')} tone="warn" />
-      </div>
-    </section>
+        </div>
+      )}
+    </MotivationalHero>
   );
 }
 
@@ -204,7 +224,11 @@ function Overview({ data, t, locale }) {
             </article>
           ))}
           {!data.attendance.length && data.capabilities.attendance && (
-            <Empty icon="check" title={t('academic.noAttendance')} body={t('academic.noAttendanceBody')} />
+            <Empty
+              icon="check"
+              title={t('academic.noAttendance')}
+              body={t('academic.noAttendanceBody')}
+            />
           )}
         </div>
       </Panel>
@@ -278,7 +302,11 @@ function Coursework({ data, t, locale, onPublishAssignment, onPublishExam }) {
             </article>
           ))}
           {!data.assignments.length && data.capabilities.assignments && (
-            <Empty icon="doc" title={t('academic.noAssignments')} body={t('academic.noAssignmentsBody')} />
+            <Empty
+              icon="doc"
+              title={t('academic.noAssignments')}
+              body={t('academic.noAssignmentsBody')}
+            />
           )}
         </div>
       </Panel>
@@ -337,7 +365,11 @@ function Coursework({ data, t, locale, onPublishAssignment, onPublishExam }) {
               </article>
             ))}
             {!data.grades.length && data.capabilities.academics && (
-              <Empty icon="trend" title={t('academic.noGrades')} body={t('academic.noGradesBody')} />
+              <Empty
+                icon="trend"
+                title={t('academic.noGrades')}
+                body={t('academic.noGradesBody')}
+              />
             )}
           </div>
         </Panel>
@@ -346,70 +378,215 @@ function Coursework({ data, t, locale, onPublishAssignment, onPublishExam }) {
   );
 }
 
-function Insights({ data, t }) {
-  return (
-    <div className={styles.insightGrid}>
-      <Panel
-        title={t('academic.riskTitle')}
-        kicker={t('academic.transparentSignals')}
-        icon="shield"
-        unavailable={!data.capabilities.intelligence}
-        t={t}
-      >
-        <div className={styles.riskIntro}>
-          <Icon name="shield" size={20} />
-          <p>{t('academic.riskExplanation')}</p>
-        </div>
-        <div className={styles.riskList}>
-          {data.risks.map((risk) => (
-            <article key={risk.id} data-level={risk.level}>
-              <span className={styles.riskScore}>
-                <b className="sf-mono">{risk.score}</b>
-                <small>{t('academic.signals')}</small>
-              </span>
-              <div>
-                <div>
-                  <strong>{risk.student}</strong>
-                  <Status status={risk.level} t={t} />
-                </div>
-                <small>{risk.cohort}</small>
-                <p>{risk.flags.map((flag) => t(`academic.flags.${flag}`)).join(' · ')}</p>
-              </div>
-            </article>
-          ))}
-          {!data.risks.length && data.capabilities.intelligence && (
-            <Empty icon="shield" title={t('academic.noRisks')} body={t('academic.noRisksBody')} />
-          )}
-        </div>
-      </Panel>
+const INSIGHT_FILTER_COPY = {
+  en: {
+    filters: 'Student insight filters',
+    allGroups: 'All my groups',
+    allRisk: 'All risk levels',
+    allStatus: 'All statuses',
+    from: 'From',
+    to: 'To',
+    reset: 'Reset',
+    showing: 'signals shown',
+    open: 'Open',
+    monitoring: 'Monitoring',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+  },
+  ru: {
+    filters: 'Фильтры аналитики учеников',
+    allGroups: 'Все мои группы',
+    allRisk: 'Все уровни риска',
+    allStatus: 'Все статусы',
+    from: 'С',
+    to: 'По',
+    reset: 'Сбросить',
+    showing: 'сигналов показано',
+    open: 'Открыт',
+    monitoring: 'Наблюдение',
+    high: 'Высокий',
+    medium: 'Средний',
+    low: 'Низкий',
+  },
+  uz: {
+    filters: 'O‘quvchi tahlili filtrlari',
+    allGroups: 'Barcha guruhlarim',
+    allRisk: 'Barcha xavf darajalari',
+    allStatus: 'Barcha holatlar',
+    from: 'Dan',
+    to: 'Gacha',
+    reset: 'Tozalash',
+    showing: 'signal ko‘rsatildi',
+    open: 'Ochiq',
+    monitoring: 'Kuzatuvda',
+    high: 'Yuqori',
+    medium: 'O‘rta',
+    low: 'Past',
+  },
+};
 
-      <Panel
-        title={t('academic.achievementsTitle')}
-        kicker={t('academic.recognitionCatalog')}
-        icon="brand"
-        unavailable={!data.capabilities.achievements}
-        t={t}
-      >
-        <div className={styles.achievementGrid}>
-          {data.achievements.map((achievement) => (
-            <article key={achievement.id}>
-              <span>{achievement.emoji}</span>
-              <div>
-                <strong>{achievement.name}</strong>
-                <p>{achievement.description}</p>
+function Insights({ data, t, locale }) {
+  const [params, setParams] = useSearchParams();
+  const copy = INSIGHT_FILTER_COPY[locale] ?? INSIGHT_FILTER_COPY.en;
+  const cohort = params.get('cohort') ?? 'all';
+  const riskLevel = params.get('risk') ?? 'all';
+  const status = params.get('status') ?? 'all';
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  const cohorts = useMemo(() => {
+    const map = new Map();
+    for (const item of [...data.schedule, ...data.attendance, ...data.risks]) {
+      if (!item.cohort) continue;
+      const id = item.cohortId ?? item.cohort.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      map.set(id, item.cohort);
+    }
+    return [...map].map(([id, name]) => ({ id, name }));
+  }, [data.attendance, data.risks, data.schedule]);
+  const risks = data.risks.filter((item) => {
+    const cohortId = item.cohortId ?? item.cohort.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const at = item.at ? new Date(item.at) : null;
+    if (cohort !== 'all' && cohortId !== cohort) return false;
+    if (riskLevel !== 'all' && item.level !== riskLevel) return false;
+    if (status !== 'all' && (item.status ?? 'open') !== status) return false;
+    if (from && at && at < new Date(`${from}T00:00:00`)) return false;
+    if (to && at && at > new Date(`${to}T23:59:59`)) return false;
+    return true;
+  });
+  const update = (key, value) => {
+    const next = new URLSearchParams(params);
+    if (!value || value === 'all') next.delete(key);
+    else next.set(key, value);
+    next.set('tab', 'insights');
+    setParams(next, { replace: true });
+  };
+
+  return (
+    <section className={styles.insightWorkspace}>
+      <div className={styles.insightFilters} aria-label={copy.filters}>
+        <label>
+          <span>{copy.allGroups}</span>
+          <select value={cohort} onChange={(event) => update('cohort', event.target.value)}>
+            <option value="all">{copy.allGroups}</option>
+            {cohorts.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{copy.allRisk}</span>
+          <select value={riskLevel} onChange={(event) => update('risk', event.target.value)}>
+            <option value="all">{copy.allRisk}</option>
+            {['high', 'medium', 'low'].map((key) => (
+              <option key={key} value={key}>
+                {copy[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{copy.allStatus}</span>
+          <select value={status} onChange={(event) => update('status', event.target.value)}>
+            <option value="all">{copy.allStatus}</option>
+            {['open', 'monitoring'].map((key) => (
+              <option key={key} value={key}>
+                {copy[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{copy.from}</span>
+          <input
+            type="date"
+            value={from}
+            onChange={(event) => update('from', event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{copy.to}</span>
+          <input type="date" value={to} onChange={(event) => update('to', event.target.value)} />
+        </label>
+        <button
+          type="button"
+          className={styles.resetFilters}
+          onClick={() => setParams({ tab: 'insights' }, { replace: true })}
+        >
+          <Icon name="refresh" size={13} /> {copy.reset}
+        </button>
+        <strong className={styles.filterCount}>
+          {risks.length} {copy.showing}
+        </strong>
+      </div>
+      <div className={styles.insightGrid}>
+        <Panel
+          title={t('academic.riskTitle')}
+          kicker={t('academic.transparentSignals')}
+          icon="shield"
+          unavailable={!data.capabilities.intelligence}
+          t={t}
+        >
+          <div className={styles.riskIntro}>
+            <Icon name="shield" size={20} />
+            <p>{t('academic.riskExplanation')}</p>
+          </div>
+          <div className={styles.riskList}>
+            {risks.map((risk) => (
+              <article key={risk.id} data-level={risk.level}>
+                <span className={styles.riskScore}>
+                  <b className="sf-mono">{risk.score}</b>
+                  <small>{t('academic.signals')}</small>
+                </span>
                 <div>
-                  <Chip tone="neutral">{t(`academic.scope.${achievement.scope}`)}</Chip>
-                  <Status status={achievement.status} t={t} />
+                  <div>
+                    <strong>{risk.student}</strong>
+                    <Status status={risk.level} t={t} />
+                  </div>
+                  <small>{risk.cohort}</small>
+                  <p>{risk.flags.map((flag) => t(`academic.flags.${flag}`)).join(' · ')}</p>
                 </div>
-              </div>
-            </article>
-          ))}
-          {!data.achievements.length && data.capabilities.achievements && (
-            <Empty icon="brand" title={t('academic.noAchievements')} body={t('academic.noAchievementsBody')} />
-          )}
-        </div>
-      </Panel>
-    </div>
+              </article>
+            ))}
+            {!risks.length && data.capabilities.intelligence && (
+              <Empty icon="shield" title={t('academic.noRisks')} body={t('academic.noRisksBody')} />
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title={t('academic.achievementsTitle')}
+          kicker={t('academic.recognitionCatalog')}
+          icon="brand"
+          unavailable={!data.capabilities.achievements}
+          t={t}
+        >
+          <div className={styles.achievementGrid}>
+            {data.achievements.map((achievement) => (
+              <article key={achievement.id}>
+                <span>{achievement.emoji}</span>
+                <div>
+                  <strong>{achievement.name}</strong>
+                  <p>{achievement.description}</p>
+                  <div>
+                    <Chip tone="neutral">{t(`academic.scope.${achievement.scope}`)}</Chip>
+                    <Status status={achievement.status} t={t} />
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!data.achievements.length && data.capabilities.achievements && (
+              <Empty
+                icon="brand"
+                title={t('academic.noAchievements')}
+                body={t('academic.noAchievementsBody')}
+              />
+            )}
+          </div>
+        </Panel>
+      </div>
+    </section>
   );
 }
 
@@ -440,7 +617,11 @@ function Resources({ data, t, onRunReport }) {
             </article>
           ))}
           {!data.reports.length && data.capabilities.reports && (
-            <Empty icon="download" title={t('academic.noReports')} body={t('academic.noReportsBody')} />
+            <Empty
+              icon="download"
+              title={t('academic.noReports')}
+              body={t('academic.noReportsBody')}
+            />
           )}
         </div>
       </Panel>
@@ -472,7 +653,11 @@ function Resources({ data, t, onRunReport }) {
             </article>
           ))}
           {!data.placement.length && data.capabilities.placement && (
-            <Empty icon="cohort" title={t('academic.noPlacement')} body={t('academic.noPlacementBody')} />
+            <Empty
+              icon="cohort"
+              title={t('academic.noPlacement')}
+              body={t('academic.noPlacementBody')}
+            />
           )}
         </div>
       </Panel>

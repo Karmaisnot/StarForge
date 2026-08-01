@@ -2,17 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import {
-  Avatar,
-  AiBadge,
-  Button,
-  Card,
-  Chip,
-  Icon,
-  ProgressBar,
-  StarMark,
-  StudentCard,
-} from '@/ui';
+import { Avatar, AiBadge, Button, Card, Chip, Icon, ProgressBar, StarMark } from '@/ui';
 import { slotRailColor } from '@/domain/models/lesson.js';
 import { priorityColor } from '@/domain/models/task.js';
 import { useToday } from '@/hooks/data.js';
@@ -25,9 +15,10 @@ const METRIC_ICONS = ['cal', 'cohort', 'brand', 'flag', 'check'];
 
 export function TodayPage() {
   const navigate = useNavigate();
-  const { t } = useT();
+  const { t, locale } = useT();
   const toast = useToast();
-  const state = useToday();
+  const [range, setRange] = useState('7d');
+  const state = useToday(range);
   const [hidden] = useState(readDashboardHiddenWidgets);
   const [doneTasks, setDoneTasks] = useState({});
   const show = (key) => !hidden[key];
@@ -73,6 +64,22 @@ export function TodayPage() {
                     ? `${t('today.updated')} · ${performance.updatedAt}`
                     : undefined
                 }
+                action={
+                  !staffMode && (
+                    <div className={styles.rangeControl} aria-label={t('today.attendanceTrend')}>
+                      {['7d', '30d', 'term'].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          data-active={range === value ? '1' : '0'}
+                          onClick={() => setRange(value)}
+                        >
+                          {value === 'term' ? 'Term' : value.replace('d', 'D')}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                }
               />
 
               <div className={styles.metricGrid}>
@@ -82,6 +89,11 @@ export function TodayPage() {
                     metric={metric}
                     icon={METRIC_ICONS[index % METRIC_ICONS.length]}
                     index={index}
+                    onOpen={() =>
+                      navigate(
+                        ['/work', '/cohorts', '/cohorts', '/surveys', '/tasks'][index] ?? '/today',
+                      )
+                    }
                   />
                 ))}
               </div>
@@ -96,6 +108,9 @@ export function TodayPage() {
                     <AttendanceChart
                       points={performance.attendanceTrend}
                       emptyLabel={t('today.noPerformanceData')}
+                      onSelect={(point) =>
+                        navigate(`/academic?tab=insights&date=${encodeURIComponent(point.label)}`)
+                      }
                     />
                   </DashboardPanel>
 
@@ -107,6 +122,7 @@ export function TodayPage() {
                       points={performance.weeklyLoad}
                       unit={t('today.lessonsShort')}
                       emptyLabel={t('today.noPerformanceData')}
+                      onSelect={(point) => navigate(`/work?day=${encodeURIComponent(point.label)}`)}
                     />
                   </DashboardPanel>
 
@@ -118,6 +134,9 @@ export function TodayPage() {
                       rows={performance.scoreBreakdown}
                       targetLabel={t('today.target')}
                       emptyLabel={t('today.noPerformanceData')}
+                      onSelect={(row) =>
+                        navigate(`/academic?tab=insights&metric=${encodeURIComponent(row.label)}`)
+                      }
                     />
                   </DashboardPanel>
 
@@ -128,7 +147,7 @@ export function TodayPage() {
                     <GroupHealth
                       groups={performance.groupHealth}
                       t={t}
-                      onOpen={() => navigate('/cohorts')}
+                      onOpen={(group) => navigate(group.id ? `/cohorts/${group.id}` : '/cohorts')}
                     />
                   </DashboardPanel>
                 </div>
@@ -156,9 +175,6 @@ export function TodayPage() {
                       onOpen={() => navigate('/tasks')}
                     />
                   )}
-                  {!staffMode && show('recentCards') && (
-                    <RecentCards cards={data.recentCards} t={t} onOpen={() => navigate('/cards')} />
-                  )}
                 </div>
 
                 <aside className={styles.contextFlow}>
@@ -171,7 +187,10 @@ export function TodayPage() {
                   )}
 
                   {data.mgmtMention?.message && (
-                    <ManagementCard mention={data.mgmtMention} onOpen={() => navigate('/mgmt')} />
+                    <ManagementCard
+                      mention={data.mgmtMention}
+                      onOpen={() => navigate('/messages?scope=management')}
+                    />
                   )}
 
                   {!staffMode && show('spotlight') && data.spotlight && (
@@ -188,6 +207,15 @@ export function TodayPage() {
                 </aside>
               </div>
             </section>
+
+            {!staffMode && (
+              <AiActionCenter
+                data={data}
+                performance={performance}
+                locale={locale}
+                navigate={navigate}
+              />
+            )}
           </>
         );
       }}
@@ -354,21 +382,29 @@ function ScoreRing({ value }) {
   );
 }
 
-function SectionHeading({ id, eyebrow, title, meta }) {
+function SectionHeading({ id, eyebrow, title, meta, action }) {
   return (
     <div className={styles.sectionHeading}>
       <div>
         <span>{eyebrow}</span>
         <h2 id={id}>{title}</h2>
       </div>
-      {meta && <small className="sf-mono">{meta}</small>}
+      <div className={styles.sectionTools}>
+        {meta && <small className="sf-mono">{meta}</small>}
+        {action}
+      </div>
     </div>
   );
 }
 
-function MetricCard({ metric, icon, index }) {
+function MetricCard({ metric, icon, index, onOpen }) {
   return (
-    <article className={styles.metricCard} style={{ '--metric-index': index }}>
+    <button
+      type="button"
+      className={styles.metricCard}
+      style={{ '--metric-index': index }}
+      onClick={onOpen}
+    >
       <div className={styles.metricTop}>
         <span className={styles.metricIcon}>
           <Icon name={icon} size={15} />
@@ -384,7 +420,10 @@ function MetricCard({ metric, icon, index }) {
         {metric.unit && <span>{metric.unit}</span>}
       </div>
       <p>{metric.label}</p>
-    </article>
+      <span className={styles.metricAction}>
+        <Icon name="arrowR" size={13} />
+      </span>
+    </button>
   );
 }
 
@@ -402,7 +441,8 @@ function DashboardPanel({ title, subtitle, className = '', children }) {
   );
 }
 
-function AttendanceChart({ points, emptyLabel }) {
+function AttendanceChart({ points, emptyLabel, onSelect }) {
+  const [active, setActive] = useState(Math.max(0, points.length - 1));
   if (points.length < 2) return <div className={styles.emptyPerformance}>{emptyLabel}</div>;
 
   const width = 680;
@@ -421,6 +461,7 @@ function AttendanceChart({ points, emptyLabel }) {
     .map(([x, pointY], index) => `${index === 0 ? 'M' : 'L'} ${x} ${pointY}`)
     .join(' ');
   const latest = points.at(-1);
+  const selected = points[active] ?? latest;
 
   return (
     <div className={styles.lineChart}>
@@ -438,12 +479,27 @@ function AttendanceChart({ points, emptyLabel }) {
         })}
         <path className={styles.trendLine} d={path} />
         {coords.map(([x, pointY], index) => (
-          <g key={`${points[index].label}-${index}`}>
+          <g
+            key={`${points[index].label}-${index}`}
+            className={styles.chartPoint}
+            role="button"
+            tabIndex="0"
+            aria-label={`${points[index].label}: ${points[index].value}%`}
+            onMouseEnter={() => setActive(index)}
+            onFocus={() => setActive(index)}
+            onClick={() => onSelect?.(points[index])}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onSelect?.(points[index]);
+              }
+            }}
+          >
             <circle
-              className={index === coords.length - 1 ? styles.currentPoint : ''}
+              className={index === active ? styles.currentPoint : ''}
               cx={x}
               cy={pointY}
-              r={index === coords.length - 1 ? 5 : 3}
+              r={index === active ? 6 : 4}
             />
             {(index % 2 === 0 || index === coords.length - 1) && (
               <text className={styles.axisLabel} x={x} y={height - 10} textAnchor="middle">
@@ -453,15 +509,16 @@ function AttendanceChart({ points, emptyLabel }) {
           </g>
         ))}
       </svg>
-      <div className={styles.chartCurrent}>
-        <span>{latest.label}</span>
-        <strong className="sf-mono">{latest.value}%</strong>
-      </div>
+      <button type="button" className={styles.chartCurrent} onClick={() => onSelect?.(selected)}>
+        <span>{selected.label}</span>
+        <strong className="sf-mono">{selected.value}%</strong>
+        <Icon name="arrowR" size={12} />
+      </button>
     </div>
   );
 }
 
-function TeachingLoadChart({ points, unit, emptyLabel }) {
+function TeachingLoadChart({ points, unit, emptyLabel, onSelect }) {
   if (!points.length) return <div className={styles.emptyPerformance}>{emptyLabel}</div>;
   const max = Math.max(1, ...points.map((point) => point.value));
   const total = points.reduce((sum, point) => sum + point.value, 0);
@@ -473,25 +530,36 @@ function TeachingLoadChart({ points, unit, emptyLabel }) {
       </div>
       <div className={styles.loadBars}>
         {points.map((point, index) => (
-          <div key={`${point.label}-${index}`} className={styles.loadColumn}>
+          <button
+            key={`${point.label}-${index}`}
+            type="button"
+            className={styles.loadColumn}
+            aria-label={`${point.label}: ${point.value} ${unit}`}
+            onClick={() => onSelect?.(point)}
+          >
             <span className="sf-mono">{point.value}</span>
             <div className={styles.loadTrack}>
               <div style={{ height: `${(point.value / max) * 100}%` }} />
             </div>
             <small>{point.label}</small>
-          </div>
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
-function ScoreBreakdown({ rows, targetLabel, emptyLabel }) {
+function ScoreBreakdown({ rows, targetLabel, emptyLabel, onSelect }) {
   if (!rows.length) return <div className={styles.emptyPerformance}>{emptyLabel}</div>;
   return (
     <div className={styles.scoreRows}>
       {rows.map((row, index) => (
-        <div key={`${row.label}-${index}`} className={styles.scoreRow}>
+        <button
+          key={`${row.label}-${index}`}
+          type="button"
+          className={styles.scoreRow}
+          onClick={() => onSelect?.(row)}
+        >
           <div className={styles.scoreRowTop}>
             <span>{row.label}</span>
             <strong className="sf-mono">{row.value}%</strong>
@@ -506,7 +574,7 @@ function ScoreBreakdown({ rows, targetLabel, emptyLabel }) {
           <small>
             {targetLabel} · {row.target}%
           </small>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -520,7 +588,12 @@ function GroupHealth({ groups, t, onOpen }) {
       {groups.map((group) => {
         const healthy = group.attendance >= 90 && group.down <= 4;
         return (
-          <button key={group.name} type="button" className={styles.groupRow} onClick={onOpen}>
+          <button
+            key={group.id ?? group.name}
+            type="button"
+            className={styles.groupRow}
+            onClick={() => onOpen(group)}
+          >
             <div className={styles.groupIdentity}>
               <span className={styles.groupMark}>
                 <StarMark size={16} color="#fffcf5" />
@@ -634,26 +707,6 @@ function TasksCard({ tasks, doneTasks, onToggle, t, onOpen }) {
   );
 }
 
-function RecentCards({ cards, t, onOpen }) {
-  return (
-    <Card
-      className={styles.operationCard}
-      title={t('today.recentCards')}
-      action={
-        <TextLink onClick={onOpen}>
-          {cards.length} {t('today.tenLink')}
-        </TextLink>
-      }
-    >
-      <div className={styles.cardsStrip}>
-        {cards.map((card) => (
-          <StudentCard key={card.id} {...card} onClick={onOpen} />
-        ))}
-      </div>
-    </Card>
-  );
-}
-
 function AiInsight({ insight, t, onOpen }) {
   return (
     <button type="button" className={styles.aiCard} onClick={onOpen}>
@@ -673,6 +726,121 @@ function AiInsight({ insight, t, onOpen }) {
         {t('today.goToChat')} <Icon name="arrowR" size={14} />
       </span>
     </button>
+  );
+}
+
+const AI_CENTER_COPY = {
+  en: {
+    eyebrow: 'StarForge Intelligence',
+    title: 'Your AI action center',
+    subtitle: 'Signals grounded in today’s attendance, workload, and student activity.',
+    confidence: 'confidence',
+    evidence: 'Evidence',
+    health: 'Support the group that needs attention',
+    healthBody: 'Review attendance and plan the next intervention from the group workspace.',
+    tasks: 'Clear the highest-impact tasks',
+    tasksBody: 'AI grouped urgent work so you can protect teaching time.',
+    insight: 'Act on the strongest student signal',
+    openAi: 'Open AI Chat',
+  },
+  ru: {
+    eyebrow: 'StarForge Intelligence',
+    title: 'Центр действий AI',
+    subtitle: 'Сигналы основаны на посещаемости, нагрузке и активности учеников.',
+    confidence: 'уверенность',
+    evidence: 'Основание',
+    health: 'Поддержите группу, которой нужно внимание',
+    healthBody: 'Проверьте посещаемость и запланируйте следующий шаг в группе.',
+    tasks: 'Закройте самые важные задачи',
+    tasksBody: 'AI собрал срочную работу, чтобы сохранить время на преподавание.',
+    insight: 'Отреагируйте на самый сильный сигнал ученика',
+    openAi: 'Открыть AI-чат',
+  },
+  uz: {
+    eyebrow: 'StarForge Intelligence',
+    title: 'AI amallar markazi',
+    subtitle: 'Davomat, yuklama va o‘quvchi faolligiga asoslangan signallar.',
+    confidence: 'ishonch',
+    evidence: 'Asos',
+    health: 'E’tibor kerak bo‘lgan guruhni qo‘llab-quvvatlang',
+    healthBody: 'Guruhda davomatni tekshiring va keyingi yordamni rejalang.',
+    tasks: 'Eng muhim vazifalarni yoping',
+    tasksBody: 'AI o‘qitish vaqtini asrash uchun shoshilinch ishlarni jamladi.',
+    insight: 'Eng kuchli o‘quvchi signaliga javob bering',
+    openAi: 'AI chatni ochish',
+  },
+};
+
+function AiActionCenter({ data, performance, locale, navigate }) {
+  const copy = AI_CENTER_COPY[locale] ?? AI_CENTER_COPY.en;
+  const weakest = [...performance.groupHealth].sort((a, b) => a.attendance - b.attendance)[0];
+  const urgent = data.pendingTasks?.filter((task) => task.urgent).length ?? 0;
+  const recommendations = [
+    {
+      title: copy.insight,
+      body: data.aiInsight?.quote,
+      evidence: data.aiInsight?.chips?.join(' · '),
+      confidence: 94,
+      path: '/ai',
+      icon: 'ai',
+    },
+    {
+      title: copy.health,
+      body: copy.healthBody,
+      evidence: weakest ? `${weakest.name} · ${weakest.attendance}%` : 'Attendance trend',
+      confidence: 91,
+      path: weakest?.id ? `/cohorts/${weakest.id}` : '/cohorts',
+      icon: 'cohort',
+    },
+    {
+      title: copy.tasks,
+      body: copy.tasksBody,
+      evidence: `${urgent} urgent · ${data.pendingTasks?.length ?? 0} total`,
+      confidence: 87,
+      path: '/tasks',
+      icon: 'check',
+    },
+  ];
+
+  return (
+    <section className={styles.aiCenter} aria-labelledby="ai-action-center">
+      <header className={styles.aiCenterHeader}>
+        <div>
+          <AiBadge>{copy.eyebrow}</AiBadge>
+          <h2 id="ai-action-center">{copy.title}</h2>
+          <p>{copy.subtitle}</p>
+        </div>
+        <Button variant="primary" icon="ai" onClick={() => navigate('/ai')}>
+          {copy.openAi}
+        </Button>
+      </header>
+      <div className={styles.aiActionsGrid}>
+        {recommendations.map((item) => (
+          <button
+            key={item.title}
+            type="button"
+            className={styles.aiActionCard}
+            onClick={() => navigate(item.path)}
+          >
+            <span className={styles.aiActionIcon}>
+              <Icon name={item.icon} size={18} />
+            </span>
+            <span className={styles.aiActionCopy}>
+              <strong>{item.title}</strong>
+              <span>{item.body}</span>
+              <small>
+                <b>{copy.evidence}:</b> {item.evidence}
+              </small>
+            </span>
+            <span className={styles.confidence}>
+              <b>{item.confidence}%</b>
+              {copy.confidence}
+            </span>
+            <Icon name="arrowR" size={15} />
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

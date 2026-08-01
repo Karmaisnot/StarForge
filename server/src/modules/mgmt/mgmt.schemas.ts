@@ -12,3 +12,9 @@ export const CreateThreadSchema = z.object({
   message: z.string().trim().min(1).max(4000),
 });
 export type CreateThreadInput = z.infer<typeof CreateThreadSchema>;
+
+/** Archive state is explicit so restoring a conversation stays idempotent. */
+export const ArchiveThreadSchema = z.object({
+  archived: z.boolean(),
+});
+export type ArchiveThreadInput = z.infer<typeof ArchiveThreadSchema>;

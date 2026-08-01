@@ -42,9 +42,22 @@ const SURVEY_ANSWERED_LABEL = loc('javob berildi', 'ответили', 'answered
  * localized constants — see `realVsConstant` in the integration notes.
  */
 export class DashboardService {
-  constructor(private readonly deps: { repo: DashboardRepository; cohorts: CohortService; cards: CardsService; tasks: TaskService; surveys: SurveyService; print: PrintService; mgmt: MgmtService; account: AccountService }) {}
+  constructor(
+    private readonly deps: {
+      repo: DashboardRepository;
+      cohorts: CohortService;
+      cards: CardsService;
+      tasks: TaskService;
+      surveys: SurveyService;
+      print: PrintService;
+      mgmt: MgmtService;
+      account: AccountService;
+    },
+  ) {}
 
   async getToday(ctx: AuthContext) {
+    if (ctx.roleKey !== 'teacher') return this.getStaffToday(ctx);
+
     const now = new Date();
     const dayStart = startOfDay(now);
     const dayEnd = new Date(dayStart.getTime() + DAY_MS);
@@ -106,6 +119,69 @@ export class DashboardService {
     };
   }
 
+  /**
+   * Non-teaching staff must not receive a teacher dashboard with fabricated
+   * attendance and lesson data. Their landing page is a role-neutral work
+   * overview assembled from the real task/account domains instead.
+   */
+  private async getStaffToday(ctx: AuthContext) {
+    const now = new Date();
+    const [teacher, tasks] = await Promise.all([
+      this.deps.account.getTeacher(ctx),
+      this.deps.tasks.list(ctx),
+    ]);
+    const pending = tasks.filter((task) => task.state !== 'done');
+    const mine = pending.filter((task) => task.mine);
+    const urgent = pending.filter((task) => task.urgent);
+    const management = pending.filter((task) => task.fromMgmt);
+
+    return {
+      workspaceMode: 'staff',
+      meta: {
+        dateLabel: dateLabel(now),
+        greetingName: teacher.name,
+        summary: loc(
+          `${pending.length} ochiq vazifa · ${mine.length} sizniki`,
+          `${pending.length} открытых задач · ${mine.length} ваших`,
+          `${pending.length} open tasks · ${mine.length} assigned to you`,
+        ),
+      },
+      surveyBanner: null,
+      stats: [
+        {
+          value: String(pending.length),
+          label: loc('Ochiq vazifalar', 'Открытые задачи', 'Open tasks'),
+          color: 'var(--sf-primary)',
+        },
+        {
+          value: String(mine.length),
+          label: loc('Mening vazifalarim', 'Мои задачи', 'My tasks'),
+          color: 'var(--sf-accent)',
+        },
+        {
+          value: String(urgent.length),
+          label: loc('Shoshilinch', 'Срочные', 'Urgent'),
+          color: 'var(--sf-danger)',
+        },
+        {
+          value: String(management.length),
+          label: loc('Boshqaruvdan', 'От руководства', 'From management'),
+          color: 'var(--sf-success)',
+        },
+      ],
+      performance: {},
+      heroLesson: { available: false, kind: 'staff', start: '—' },
+      schedule: [],
+      recentCards: [],
+      pendingTasks: this.buildPendingTasks(tasks),
+      aiInsight: null,
+      printQueue: [],
+      mgmtMention: null,
+      spotlight: null,
+      activity: [],
+    };
+  }
+
   // -- meta -------------------------------------------------------------------
 
   private buildMeta(
@@ -130,9 +206,7 @@ export class DashboardService {
 
   // -- survey banner ----------------------------------------------------------
 
-  private buildSurveyBanner(
-    activeSurveys: Awaited<ReturnType<SurveyService['listActive']>>,
-  ) {
+  private buildSurveyBanner(activeSurveys: Awaited<ReturnType<SurveyService['listActive']>>) {
     const survey = activeSurveys[0];
     if (!survey) return null; // no active survey -> frontend can hide the banner
     return {
@@ -197,11 +271,7 @@ export class DashboardService {
     // the first one as the hero subject (the seed orders them by lesson time).
     const hero = cohorts[0];
     return {
-      eyebrow: loc(
-        'Keyingi dars',
-        'Следующий урок',
-        'Next lesson',
-      ),
+      eyebrow: loc('Keyingi dars', 'Следующий урок', 'Next lesson'),
       title: hero?.name ?? '', // plain cohort name, e.g. "9-B Algebra"
       titleAccent: hero?.level ?? loc('—', '—', '—'), // localized level
       sub: hero?.room ?? loc('—', '—', '—'), // localized room/location line
@@ -283,10 +353,7 @@ export class DashboardService {
       eta: j.eta, // localized, computed by PrintService
       icon: j.icon,
       tone: j.state === 'now' ? 'primary' : 'accent',
-      label:
-        j.state === 'now'
-          ? loc('Chop', 'Печать', 'Print')
-          : loc('Navbat', 'Очередь', 'Queue'),
+      label: j.state === 'now' ? loc('Chop', 'Печать', 'Print') : loc('Navbat', 'Очередь', 'Queue'),
     }));
   }
 
@@ -309,7 +376,8 @@ export class DashboardService {
     // come straight from CohortService's computed metrics.
     const cohort = [...cohorts].sort((a, b) => b.attendance - a.attendance)[0];
     if (!cohort) return null;
-    const tone = cohort.attendance >= 90 ? 'success' : cohort.attendance >= 75 ? 'accent' : 'danger';
+    const tone =
+      cohort.attendance >= 90 ? 'success' : cohort.attendance >= 75 ? 'accent' : 'danger';
     const toneLabel =
       tone === 'success'
         ? loc('Yaxshi', 'Хорошо', 'Good')

@@ -116,6 +116,22 @@ export class CardsRepository {
     return this.db.student.findFirst({ where: { academyId, name: name.trim() } });
   }
 
+  /** Resolve a physical student access code within the current tenant. */
+  findStudentByCode(code: string, academyId: string) {
+    return this.db.student.findFirst({ where: { academyId, studentId: code.trim() } });
+  }
+
+  /** Immutable audit record for every security-desk scan, valid or invalid. */
+  recordScan(data: {
+    academyId: string;
+    studentId?: string;
+    scannedById: string;
+    code: string;
+    valid: boolean;
+  }) {
+    return this.db.accessScan.create({ data });
+  }
+
   /** A single cohort scoped to the tenant (null if it belongs to another academy). */
   findCohort(id: string, academyId: string) {
     return this.db.cohort.findFirst({ where: { id, academyId } });

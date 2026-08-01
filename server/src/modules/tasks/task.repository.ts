@@ -14,6 +14,7 @@ export interface CreateTaskData {
   priority: string | null;
   projectId: string | null;
   deadlineLabel: Prisma.InputJsonValue | null;
+  deadlineAt: Date | null;
   urgent: boolean;
   fromMgmt: boolean;
 }
@@ -67,6 +68,54 @@ export class TaskRepository {
     return res.count;
   }
 
+  /** Atomically move a task and compact integer positions in both columns. */
+  async move(
+    id: string,
+    academyId: string,
+    columnId: string,
+    targetIndex: number,
+  ): Promise<TaskWithProject | null> {
+    return this.db.$transaction(async (tx) => {
+      const task = await tx.task.findFirst({ where: { id, academyId } });
+      if (!task) return null;
+
+      const sourceRows = await tx.task.findMany({
+        where: { academyId, columnId: task.columnId, NOT: { id } },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true },
+      });
+      const targetRows =
+        task.columnId === columnId
+          ? sourceRows
+          : await tx.task.findMany({
+              where: { academyId, columnId, NOT: { id } },
+              orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+              select: { id: true },
+            });
+      const insertAt = Math.max(0, Math.min(targetRows.length, targetIndex));
+      const orderedTarget = [...targetRows];
+      orderedTarget.splice(insertAt, 0, { id });
+
+      if (task.columnId !== columnId) {
+        await Promise.all(
+          sourceRows.map((row, position) =>
+            tx.task.updateMany({ where: { id: row.id, academyId }, data: { position } }),
+          ),
+        );
+      }
+      await Promise.all(
+        orderedTarget.map((row, position) =>
+          tx.task.updateMany({
+            where: { id: row.id, academyId },
+            data: { columnId, position },
+          }),
+        ),
+      );
+
+      return tx.task.findFirst({ where: { id, academyId }, include: { project: true } });
+    });
+  }
+
   /** Insert a new task. Position 0 keeps it at the top of its column on read. */
   create(data: CreateTaskData): Promise<TaskWithProject> {
     return this.db.task.create({
@@ -79,6 +128,7 @@ export class TaskRepository {
         priority: data.priority,
         projectId: data.projectId,
         deadlineLabel: data.deadlineLabel ?? Prisma.JsonNull,
+        deadlineAt: data.deadlineAt,
         urgent: data.urgent,
         fromMgmt: data.fromMgmt,
         position: 0,

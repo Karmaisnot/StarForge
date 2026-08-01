@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CardsService } from './cards.service';
-import { IssueCardSchema } from './cards.schemas';
+import { IssueCardSchema, ScanCardSchema } from './cards.schemas';
 
 /** Cards routes (read + issue). All require authentication. */
 export function cardsRoutes(service: CardsService) {
@@ -17,6 +17,11 @@ export function cardsRoutes(service: CardsService) {
       const body = IssueCardSchema.parse(req.body);
       reply.code(201);
       return service.issue(req.auth, body);
+    });
+
+    app.post('/cards/scan', auth, (req) => {
+      const { code } = ScanCardSchema.parse(req.body);
+      return service.scan(req.auth, code);
     });
   };
 }

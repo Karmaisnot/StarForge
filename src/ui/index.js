@@ -15,4 +15,5 @@ export { Segmented } from './Segmented.jsx';
 export { ViewSwitcher } from './ViewSwitcher.jsx';
 export { FilterChip } from './FilterChip.jsx';
 export { Modal } from './Modal.jsx';
+export { MotivationalHero } from './MotivationalHero.jsx';
 export { cx } from './cx.js';

@@ -34,6 +34,8 @@ export function mapTask(task: TaskWithProject, isMine: boolean) {
     fromMgmt: task.fromMgmt,
     subtasks,
     assigner: task.assigner, // mixed: plain name OR localized role
+    position: task.position,
+    deadlineAt: task.deadlineAt?.toISOString() ?? null,
     ...(isMine ? { mine: true } : {}),
   };
 }

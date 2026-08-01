@@ -4,12 +4,16 @@ import type { TeacherWithRelations, TeacherSummary } from './account.repository'
 /** Teacher DTO — matches the teacherFixture shape (localized leaves passed through). */
 export function mapTeacher(teacher: TeacherWithRelations, summary: TeacherSummary) {
   return {
+    id: teacher.id,
     name: teacher.name,
+    roleKey: teacher.roleKey,
+    accountKind: teacher.roleKey,
     role: teacher.role, // localized {uz,ru,en}
     branch: teacher.branch.name, // localized {uz,ru,en}
     username: teacher.username,
     subjects: teacher.subjects.map((ts) => ts.subject.name), // localized[]
     summary,
+    preferredLanguage: teacher.preferences?.locale ?? 'uz',
   };
 }
 

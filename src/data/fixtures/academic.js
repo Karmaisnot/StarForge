@@ -22,6 +22,7 @@ export function buildAcademicFixture() {
     schedule: [
       {
         id: 'lesson-a1',
+        cohortId: '9b-algebra',
         title: text('Chiziqli funksiyalar', 'Линейные функции', 'Linear functions'),
         cohort: '9-B Algebra',
         room: '204',
@@ -31,6 +32,7 @@ export function buildAcademicFixture() {
       },
       {
         id: 'lesson-a2',
+        cohortId: '10v-geometriya',
         title: text('Geometriya amaliyoti', 'Практика по геометрии', 'Geometry workshop'),
         cohort: '10-V Geometry',
         room: '302',
@@ -42,6 +44,7 @@ export function buildAcademicFixture() {
     attendance: [
       {
         id: 'att-1',
+        cohortId: '9b-algebra',
         student: 'Aziza Karimova',
         cohort: '9-B Algebra',
         lesson: text('Tenglamalar', 'Уравнения', 'Equations'),
@@ -50,6 +53,7 @@ export function buildAcademicFixture() {
       },
       {
         id: 'att-2',
+        cohortId: '9b-algebra',
         student: 'Sardor Aliyev',
         cohort: '9-B Algebra',
         lesson: text('Tenglamalar', 'Уравнения', 'Equations'),
@@ -58,6 +62,7 @@ export function buildAcademicFixture() {
       },
       {
         id: 'att-3',
+        cohortId: '10v-geometriya',
         student: 'Madina Rasulova',
         cohort: '10-V Geometry',
         lesson: text('Uchburchaklar', 'Треугольники', 'Triangles'),
@@ -68,6 +73,7 @@ export function buildAcademicFixture() {
     assignments: [
       {
         id: 'asg-1',
+        cohortId: '9b-algebra',
         title: text('Funksiyalar grafigi', 'Графики функций', 'Function graphs'),
         cohort: '9-B Algebra',
         dueAt: shifted(3, 18),
@@ -76,6 +82,7 @@ export function buildAcademicFixture() {
       },
       {
         id: 'asg-2',
+        cohortId: '10v-geometriya',
         title: text('Geometriya isboti', 'Доказательство по геометрии', 'Geometry proof'),
         cohort: '10-V Geometry',
         dueAt: shifted(5, 18),
@@ -86,6 +93,7 @@ export function buildAcademicFixture() {
     exams: [
       {
         id: 'exam-1',
+        cohortId: '9b-algebra',
         title: text('Oraliq nazorat', 'Промежуточная работа', 'Midterm assessment'),
         subject: text('Algebra', 'Алгебра', 'Algebra'),
         cohort: '9-B Algebra',
@@ -95,13 +103,37 @@ export function buildAcademicFixture() {
       },
     ],
     grades: [
-      { id: 'grade-1', student: 'Aziza Karimova', subject: 'Algebra', value: 92, display: 'A' },
-      { id: 'grade-2', student: 'Sardor Aliyev', subject: 'Algebra', value: 74, display: 'C' },
-      { id: 'grade-3', student: 'Madina Rasulova', subject: 'Geometry', value: 86, display: 'B' },
+      {
+        id: 'grade-1',
+        cohortId: '9b-algebra',
+        student: 'Aziza Karimova',
+        subject: 'Algebra',
+        value: 92,
+        display: 'A',
+      },
+      {
+        id: 'grade-2',
+        cohortId: '9b-algebra',
+        student: 'Sardor Aliyev',
+        subject: 'Algebra',
+        value: 74,
+        display: 'C',
+      },
+      {
+        id: 'grade-3',
+        cohortId: '10v-geometriya',
+        student: 'Madina Rasulova',
+        subject: 'Geometry',
+        value: 86,
+        display: 'B',
+      },
     ],
     risks: [
       {
         id: 'risk-1',
+        cohortId: '9b-algebra',
+        status: 'open',
+        at: shifted(-1, 10),
         student: 'Sardor Aliyev',
         cohort: '9-B Algebra',
         level: 'medium',
@@ -110,6 +142,9 @@ export function buildAcademicFixture() {
       },
       {
         id: 'risk-2',
+        cohortId: '10v-geometriya',
+        status: 'monitoring',
+        at: shifted(-2, 14),
         student: 'Madina Rasulova',
         cohort: '10-V Geometry',
         level: 'low',
@@ -140,14 +175,22 @@ export function buildAcademicFixture() {
         id: 'report-1',
         key: 'attendance',
         title: text('Davomat hisoboti', 'Отчёт по посещаемости', 'Attendance report'),
-        description: text('Guruhlar bo‘yicha davomat', 'Посещаемость по группам', 'Attendance by group'),
+        description: text(
+          'Guruhlar bo‘yicha davomat',
+          'Посещаемость по группам',
+          'Attendance by group',
+        ),
         format: 'pdf',
       },
       {
         id: 'report-2',
         key: 'grades',
         title: text('Baholar hisoboti', 'Отчёт по оценкам', 'Grades report'),
-        description: text('Fanlar bo‘yicha natijalar', 'Результаты по предметам', 'Results by subject'),
+        description: text(
+          'Fanlar bo‘yicha natijalar',
+          'Результаты по предметам',
+          'Results by subject',
+        ),
         format: 'xlsx',
       },
     ],

@@ -3,6 +3,7 @@
 // Fixtures may carry {uz,ru,en} leaves; `respond` resolves them to the active locale.
 import { clone, respond as rawRespond } from '@/data/async.js';
 import { deepLocalize, getLocale } from '@/i18n/locale.js';
+import { createStudentWorkbookPayload } from '@/data/spreadsheet.js';
 
 const respond = (value) => rawRespond(deepLocalize(value, getLocale()));
 import {
@@ -26,7 +27,7 @@ import {
 
 import { teacherFixture } from '@/data/fixtures/teacher.js';
 import { peopleFixture } from '@/data/fixtures/people.js';
-import { cohortsFixture, rosterFixture } from '@/data/fixtures/cohorts.js';
+import { buildCohortWorkspace, cohortsFixture, rosterFixture } from '@/data/fixtures/cohorts.js';
 import { recentCardsFixture, cardTypesFixture, cardStatsFixture } from '@/data/fixtures/cards.js';
 import { tasksFixture, taskColumnsFixture, taskFiltersFixture } from '@/data/fixtures/tasks.js';
 import {
@@ -53,7 +54,12 @@ import {
   aiTranscriptFixture,
 } from '@/data/fixtures/ai.js';
 import { printersFixture, printJobsFixture, printLibraryFixture } from '@/data/fixtures/print.js';
-import { activeSurveysFixture, surveyHistoryFixture } from '@/data/fixtures/surveys.js';
+import {
+  activeSurveysFixture,
+  surveyDraftsFixture,
+  surveyHistoryFixture,
+  surveyQuestionsFixture,
+} from '@/data/fixtures/surveys.js';
 import { mgmtThreadsFixture, mgmtTranscriptFixture } from '@/data/fixtures/mgmt.js';
 import {
   notificationGroupsFixture,
@@ -131,6 +137,12 @@ export class MockAccountRepository extends IAccountRepository {
 export class MockCohortRepository extends ICohortRepository {
   #cohorts = clone(cohortsFixture);
   #rosters = clone(rosterFixture);
+  #workspaces = Object.fromEntries(
+    this.#cohorts.map((cohort) => [
+      cohort.id,
+      buildCohortWorkspace(cohort, this.#rosters[cohort.id] ?? []),
+    ]),
+  );
 
   list() {
     return respond(this.#cohorts);
@@ -140,6 +152,15 @@ export class MockCohortRepository extends ICohortRepository {
   }
   getRoster(cohortId) {
     return respond(this.#rosters[cohortId] ?? []);
+  }
+  getWorkspace(cohortId, { from, to } = {}) {
+    const workspace = clone(this.#workspaces[cohortId] ?? {});
+    if (workspace.attendanceHistory) {
+      workspace.attendanceHistory = workspace.attendanceHistory.filter(
+        (entry) => (!from || entry.date >= from) && (!to || entry.date <= to),
+      );
+    }
+    return respond(workspace);
   }
   create(draft) {
     const cohort = {
@@ -155,6 +176,7 @@ export class MockCohortRepository extends ICohortRepository {
     };
     this.#cohorts.unshift(cohort);
     this.#rosters[cohort.id] = [];
+    this.#workspaces[cohort.id] = buildCohortWorkspace(cohort, []);
     return respond(cohort);
   }
   saveAttendance(cohortId, entries) {
@@ -164,7 +186,39 @@ export class MockCohortRepository extends ICohortRepository {
       if (marked.has(String(student.id)))
         student.attendance = marked.get(String(student.id)) ? 100 : 0;
     }
+    const workspace = this.#workspaces[cohortId];
+    if (workspace) {
+      const today = new Date().toISOString().slice(0, 10);
+      workspace.attendanceHistory = workspace.attendanceHistory.filter(
+        (entry) => entry.date !== today,
+      );
+      workspace.attendanceHistory.push(
+        ...entries.map((entry) => ({
+          id: `${cohortId}-${entry.studentId}-${today}`,
+          studentId: entry.studentId,
+          date: today,
+          status: entry.present ? 'present' : 'absent',
+        })),
+      );
+      workspace.revision += 1;
+    }
     return respond({ cohortId, saved: entries.length });
+  }
+  advance(cohortId) {
+    const cohort = this.#cohorts.find((candidate) => candidate.id === cohortId);
+    const workspace = this.#workspaces[cohortId];
+    if (!cohort || !workspace) return respond(null);
+    const progression = workspace.progression;
+    progression.current = progression.next;
+    if (progression.mode === 'month') progression.next = Number(progression.current) + 1;
+    else {
+      cohort.level = clone(progression.current);
+      progression.next = { uz: 'Daraja IV', ru: 'Уровень IV', en: 'Level IV' };
+    }
+    progression.startedAt = new Date().toISOString().slice(0, 10);
+    progression.readiness = 72;
+    workspace.revision += 1;
+    return respond({ cohortId, progression });
   }
 }
 
@@ -214,7 +268,7 @@ export class MockCardRepository extends ICardRepository {
 }
 
 export class MockTaskRepository extends ITaskRepository {
-  #tasks = tasksFixture.map((t) => ({ ...t }));
+  #tasks = tasksFixture.map((t, position) => ({ ...t, position: t.position ?? position }));
   list() {
     return respond(this.#tasks);
   }
@@ -228,6 +282,28 @@ export class MockTaskRepository extends ITaskRepository {
     const task = this.#tasks.find((t) => t.id === id);
     if (task) task.state = state;
     return respond(task ?? null);
+  }
+  move(id, state, targetIndex) {
+    const task = this.#tasks.find((candidate) => String(candidate.id) === String(id));
+    if (!task) return respond(null);
+    const sourceState = task.state;
+    const source = this.#tasks
+      .filter((candidate) => candidate.state === sourceState && candidate !== task)
+      .sort((a, b) => a.position - b.position);
+    const target = (
+      sourceState === state ? source : this.#tasks.filter((candidate) => candidate.state === state)
+    )
+      .filter((candidate) => candidate !== task)
+      .sort((a, b) => a.position - b.position);
+    task.state = state;
+    target.splice(Math.max(0, Math.min(target.length, targetIndex)), 0, task);
+    source.forEach((candidate, position) => {
+      candidate.position = position;
+    });
+    target.forEach((candidate, position) => {
+      candidate.position = position;
+    });
+    return respond(task);
   }
   create(draft) {
     const nextId = Math.max(0, ...this.#tasks.map((task) => Number(task.id) || 0)) + 1;
@@ -243,6 +319,7 @@ export class MockTaskRepository extends ITaskRepository {
       subtasks: null,
       assigner: 'Me',
       mine: true,
+      position: this.#tasks.filter((candidate) => candidate.state === 'todo').length,
       ...draft,
     };
     this.#tasks.unshift(task);
@@ -251,7 +328,7 @@ export class MockTaskRepository extends ITaskRepository {
 }
 
 export class MockDashboardRepository extends IDashboardRepository {
-  getToday() {
+  getToday(range = '7d') {
     const locale = getLocale();
     const code = locale === 'ru' ? 'ru-RU' : locale === 'uz' ? 'uz-UZ' : 'en-US';
     const dateLabel = new Intl.DateTimeFormat(code, {
@@ -282,7 +359,10 @@ export class MockDashboardRepository extends IDashboardRepository {
         stats: [
           { value: '3', label: { uz: 'Ochiq vazifalar', ru: 'Открытые задачи', en: 'Open tasks' } },
           { value: '2', label: { uz: 'Uchrashuvlar', ru: 'Встречи', en: 'Meetings' } },
-          { value: '1', label: { uz: 'Ochiq so‘rovlar', ru: 'Открытые запросы', en: 'Open requests' } },
+          {
+            value: '1',
+            label: { uz: 'Ochiq so‘rovlar', ru: 'Открытые запросы', en: 'Open requests' },
+          },
           { value: '4', label: { uz: 'O‘qilmagan', ru: 'Непрочитанные', en: 'Unread' } },
         ],
         performance: {},
@@ -297,12 +377,24 @@ export class MockDashboardRepository extends IDashboardRepository {
         activity: [],
       });
     }
+    const performance = clone(teacherPerformanceFixture);
+    if (range === '7d') {
+      performance.attendanceTrend = performance.attendanceTrend.slice(-5);
+    } else if (range === 'term') {
+      performance.attendanceTrend = [
+        { label: 'M1', value: 87 },
+        { label: 'M2', value: 89 },
+        { label: 'M3', value: 90 },
+        { label: 'M4', value: 92 },
+        { label: 'M5', value: 94 },
+      ];
+    }
     return respond({
       workspaceMode: 'teaching',
       meta: { ...todayMetaFixture, dateLabel },
       surveyBanner: surveyBannerFixture,
       stats: todayStatsFixture,
-      performance: teacherPerformanceFixture,
+      performance,
       heroLesson: heroLessonFixture,
       schedule: scheduleFixture,
       recentCards: recentCardsFixture,
@@ -390,12 +482,28 @@ export class MockPrintRepository extends IPrintRepository {
 export class MockSurveyRepository extends ISurveyRepository {
   #active = clone(activeSurveysFixture);
   #history = clone(surveyHistoryFixture);
+  #drafts = clone(surveyDraftsFixture);
 
   listActive() {
     return respond(this.#active);
   }
   listHistory() {
     return respond(this.#history);
+  }
+  getDetail(id) {
+    const survey = this.#active.find((candidate) => String(candidate.id) === String(id));
+    if (!survey) return respond(null);
+    return respond({
+      ...survey,
+      questions: clone(surveyQuestionsFixture[id] ?? []),
+      draft: clone(this.#drafts[id] ?? { answers: {}, progress: survey.progress ?? 0 }),
+    });
+  }
+  saveDraft(id, input) {
+    this.#drafts[id] = clone(input);
+    const survey = this.#active.find((candidate) => String(candidate.id) === String(id));
+    if (survey) survey.progress = Number(input.progress) || 0;
+    return respond({ id, ...this.#drafts[id] });
   }
   submit(id, input) {
     const survey = this.#active.find((candidate) => candidate.id === id);
@@ -407,10 +515,12 @@ export class MockSurveyRepository extends ISurveyRepository {
         status: 'Submitted',
         skipped: false,
         date: 'Now',
-        rating: input.rating,
-        comment: input.comment ?? '',
+        answers: clone(input.answers ?? {}),
+        rating: input.rating ?? firstAnswer(input.answers, 'number'),
+        comment: input.comment ?? firstAnswer(input.answers, 'string') ?? '',
       });
     }
+    delete this.#drafts[id];
     return respond({ id, submitted: true });
   }
   skip(id) {
@@ -429,6 +539,10 @@ export class MockSurveyRepository extends ISurveyRepository {
     }
     return respond({ id, skipped: true });
   }
+}
+
+function firstAnswer(answers, type) {
+  return Object.values(answers ?? {}).find((answer) => typeof answer === type) ?? null;
 }
 
 export class MockMgmtRepository extends IMgmtRepository {
@@ -475,6 +589,17 @@ export class MockMgmtRepository extends IMgmtRepository {
     const thread = this.#threads.find((candidate) => String(candidate.id) === String(threadId));
     if (thread) thread.unread = 0;
     return respond({ id: threadId, read: true });
+  }
+  archiveThread(threadId, archived) {
+    const thread = this.#threads.find((candidate) => String(candidate.id) === String(threadId));
+    if (thread) thread.archived = Boolean(archived);
+    return respond({ id: threadId, archived: Boolean(archived) });
+  }
+  deleteThread(threadId) {
+    const key = String(threadId);
+    this.#threads = this.#threads.filter((candidate) => String(candidate.id) !== key);
+    delete this.#transcripts[key];
+    return respond({ id: threadId, deleted: true });
   }
 }
 
@@ -628,6 +753,14 @@ export class MockPeopleRepository extends IPeopleRepository {
   getDirectory() {
     return respond(peopleFixture);
   }
+  exportStudents({ ids = [] } = {}) {
+    const localized = deepLocalize(clone(peopleFixture), getLocale());
+    const allowed = new Set(ids.map(String));
+    const students = allowed.size
+      ? localized.students.filter((student) => allowed.has(String(student.id)))
+      : localized.students;
+    return rawRespond(createStudentWorkbookPayload(students));
+  }
 }
 
 export class MockAcademicRepository extends IAcademicRepository {
@@ -646,9 +779,7 @@ export class MockAcademicRepository extends IAcademicRepository {
   }
 
   publishExam(examId) {
-    const exam = this.#workspace.exams.find(
-      (candidate) => String(candidate.id) === String(examId),
-    );
+    const exam = this.#workspace.exams.find((candidate) => String(candidate.id) === String(examId));
     if (exam) exam.published = true;
     return respond(exam);
   }

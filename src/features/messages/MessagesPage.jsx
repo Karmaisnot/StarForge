@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
 import { Avatar, Chip, Icon, Modal, StarMark } from '@/ui';
@@ -9,13 +10,14 @@ import { useT } from '@/hooks/useT.js';
 import { isApiMode } from '@/data/http/apiConfig.js';
 import styles from './messages.module.css';
 
-const FILTERS = ['all', 'people', 'groups'];
+const FILTERS = ['all', 'people', 'groups', 'management', 'archived'];
 
 export function MessagesPage() {
   const { mgmt, cohorts: cohortService } = useServices();
   const { t, locale } = useT();
   const toast = useToast();
   const liveMode = isApiMode();
+  const [searchParams, setSearchParams] = useSearchParams();
   const state = useAsync(async () => {
     const [staffThreads, cohorts] = await Promise.all([
       mgmt.getThreads(),
@@ -31,10 +33,27 @@ export function MessagesPage() {
   const [extraThreads, setExtraThreads] = useState([]);
   const [sentByThread, setSentByThread] = useState({});
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
+  const requestedScope = searchParams.get('scope');
+  const [filter, setFilter] = useState(() =>
+    FILTERS.includes(requestedScope) ? requestedScope : 'all',
+  );
+  const [threadState, setThreadState] = useState({});
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+
+  useEffect(() => {
+    if (FILTERS.includes(requestedScope)) setFilter(requestedScope);
+  }, [requestedScope]);
+
+  const selectFilter = (nextFilter) => {
+    setFilter(nextFilter);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextFilter === 'all') nextParams.delete('scope');
+    else nextParams.set('scope', nextFilter);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const appendMessage = (threadId, message) => {
     setSentByThread((current) => ({
@@ -54,8 +73,10 @@ export function MessagesPage() {
       {(data) => {
         const staffThreads = data.staffThreads.map((thread) => ({
           ...thread,
-          kind: thread.channel ? 'group' : 'staff',
+          kind: thread.channel ? 'group' : 'management',
           persisted: true,
+          archived: threadState[thread.id]?.archived ?? Boolean(thread.archived),
+          deleted: threadState[thread.id]?.deleted ?? false,
           profileType: thread.channel ? t('messages.groupChat') : thread.role,
         }));
         const groupThreads = (liveMode ? [] : data.cohorts).map((cohort) => ({
@@ -73,16 +94,27 @@ export function MessagesPage() {
           memberCount: cohort.studentCount ?? 0,
           profileType: t('messages.groupChat'),
         }));
-        const threads = [...extraThreads, ...staffThreads, ...groupThreads].filter(
-          (thread, index, list) =>
-            list.findIndex((candidate) => candidate.id === thread.id) === index,
-        );
-        const active = threads.find((thread) => thread.id === openId) ?? threads[0] ?? null;
+        const threads = [...extraThreads, ...staffThreads, ...groupThreads]
+          .map((thread) => ({
+            ...thread,
+            archived: threadState[thread.id]?.archived ?? Boolean(thread.archived),
+            deleted: threadState[thread.id]?.deleted ?? Boolean(thread.deleted),
+          }))
+          .filter(
+            (thread, index, list) =>
+              !thread.deleted &&
+              list.findIndex((candidate) => candidate.id === thread.id) === index,
+          );
         const normalizedQuery = query.trim().toLowerCase();
         const visibleThreads = threads.filter((thread) => {
-          const matchesFilter =
-            filter === 'all' ||
-            (filter === 'groups' ? thread.kind === 'group' : thread.kind !== 'group');
+          const matchesFilter = (() => {
+            if (filter === 'archived') return thread.archived;
+            if (thread.archived) return false;
+            if (filter === 'all') return true;
+            if (filter === 'groups') return thread.kind === 'group';
+            if (filter === 'management') return thread.kind === 'management';
+            return thread.kind === 'student' || thread.kind === 'staff';
+          })();
           const matchesQuery =
             !normalizedQuery ||
             `${thread.name} ${thread.role} ${thread.lastMessage}`
@@ -90,6 +122,8 @@ export function MessagesPage() {
               .includes(normalizedQuery);
           return matchesFilter && matchesQuery;
         });
+        const active =
+          visibleThreads.find((thread) => thread.id === openId) ?? visibleThreads[0] ?? null;
         const contacts = buildContacts(data, staffThreads, t).filter(
           (contact) => !liveMode || contact.threadId,
         );
@@ -99,6 +133,47 @@ export function MessagesPage() {
           setMobileChatOpen(true);
           const thread = threads.find((candidate) => candidate.id === threadId);
           if (thread?.persisted) mgmt.markRead(threadId).catch(() => {});
+        };
+
+        const archiveThread = async (thread) => {
+          if (!thread) return;
+          const archived = !thread.archived;
+          setThreadState((current) => ({
+            ...current,
+            [thread.id]: { ...current[thread.id], archived },
+          }));
+          try {
+            if (thread.persisted) await mgmt.archiveThread(thread.id, archived);
+            toast(t(archived ? 'messages.archivedToast' : 'messages.unarchivedToast'), 'success');
+          } catch {
+            setThreadState((current) => ({
+              ...current,
+              [thread.id]: { ...current[thread.id], archived: !archived },
+            }));
+            toast(t('common.error'), 'danger');
+          }
+        };
+
+        const deleteThread = async () => {
+          const thread = threads.find((candidate) => candidate.id === deleteTargetId);
+          if (!thread) return setDeleteTargetId(null);
+          setDeleteTargetId(null);
+          setThreadState((current) => ({
+            ...current,
+            [thread.id]: { ...current[thread.id], deleted: true },
+          }));
+          setOpenId(null);
+          setMobileChatOpen(false);
+          try {
+            if (thread.persisted) await mgmt.deleteThread(thread.id);
+            toast(t('messages.deletedToast'), 'success');
+          } catch {
+            setThreadState((current) => ({
+              ...current,
+              [thread.id]: { ...current[thread.id], deleted: false },
+            }));
+            toast(t('common.error'), 'danger');
+          }
         };
 
         const createConversation = (contact) => {
@@ -183,7 +258,7 @@ export function MessagesPage() {
                       key={key}
                       type="button"
                       data-on={filter === key ? '1' : '0'}
-                      onClick={() => setFilter(key)}
+                      onClick={() => selectFilter(key)}
                     >
                       {t(`messages.${key}`)}
                     </button>
@@ -214,6 +289,8 @@ export function MessagesPage() {
                   onSend={sendMessage}
                   onBack={() => setMobileChatOpen(false)}
                   onProfile={() => setProfileOpen(true)}
+                  onArchive={() => archiveThread(active)}
+                  onDelete={() => setDeleteTargetId(active.id)}
                   t={t}
                   locale={locale}
                   mgmt={mgmt}
@@ -242,6 +319,24 @@ export function MessagesPage() {
               messages={active ? (sentByThread[active.id] ?? []) : []}
               t={t}
             />
+            <Modal
+              open={Boolean(deleteTargetId)}
+              onClose={() => setDeleteTargetId(null)}
+              title={t('messages.deleteChat')}
+            >
+              <div className={styles.confirmDelete}>
+                <p>{t('messages.deleteConfirm')}</p>
+                <div>
+                  <button type="button" onClick={() => setDeleteTargetId(null)}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="button" data-danger="1" onClick={deleteThread}>
+                    <Icon name="trash" size={15} />
+                    {t('messages.deleteChat')}
+                  </button>
+                </div>
+              </div>
+            </Modal>
           </>
         );
       }}
@@ -261,7 +356,13 @@ function ThreadRow({ thread, active, onClick, t }) {
         <span className={styles.threadRole}>{thread.role}</span>
         <span className={styles.threadLine}>
           <small>{thread.lastMessage || t('messages.startConversation')}</small>
-          {thread.unread > 0 && <i>{thread.unread}</i>}
+          {thread.archived ? (
+            <span className={styles.archivedMark} title={t('messages.archived')}>
+              <Icon name="archive" size={13} />
+            </span>
+          ) : (
+            thread.unread > 0 && <i>{thread.unread}</i>
+          )}
         </span>
       </span>
     </button>
@@ -290,6 +391,8 @@ function Conversation({
   onSend,
   onBack,
   onProfile,
+  onArchive,
+  onDelete,
   t,
   locale,
   mgmt,
@@ -468,14 +571,35 @@ function Conversation({
             <small>{thread.online ? t('messages.online') : thread.role}</small>
           </span>
         </button>
-        <button
-          type="button"
-          className={styles.headerAction}
-          onClick={onProfile}
-          aria-label={t('messages.openProfile')}
-        >
-          <Icon name="user" size={17} />
-        </button>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.headerAction}
+            onClick={onArchive}
+            aria-label={t(thread.archived ? 'messages.unarchive' : 'messages.archive')}
+            title={t(thread.archived ? 'messages.unarchive' : 'messages.archive')}
+          >
+            <Icon name="archive" size={17} />
+          </button>
+          <button
+            type="button"
+            className={`${styles.headerAction} ${styles.dangerAction}`}
+            onClick={onDelete}
+            aria-label={t('messages.deleteChat')}
+            title={t('messages.deleteChat')}
+          >
+            <Icon name="trash" size={17} />
+          </button>
+          <button
+            type="button"
+            className={styles.headerAction}
+            onClick={onProfile}
+            aria-label={t('messages.openProfile')}
+            title={t('messages.openProfile')}
+          >
+            <Icon name="user" size={17} />
+          </button>
+        </div>
       </header>
 
       <div className={styles.messageBody} ref={bodyRef}>
@@ -651,7 +775,7 @@ function NewChatModal({ open, onClose, contacts, onSelect, t }) {
     `${contact.name} ${contact.role} ${contact.groupName ?? ''}`.toLowerCase().includes(normalized),
   );
   const sections = [
-    ['staff', filtered.filter((contact) => contact.kind === 'staff')],
+    ['management', filtered.filter((contact) => contact.kind === 'management')],
     ['myGroups', filtered.filter((contact) => contact.kind === 'group')],
     ['students', filtered.filter((contact) => contact.kind === 'student')],
   ];
@@ -718,7 +842,7 @@ function buildContacts(data, staffThreads, t) {
       threadId: thread.id,
       name: thread.name,
       role: thread.role,
-      kind: 'staff',
+      kind: 'management',
       online: thread.online,
       profileType: thread.role,
     }));

@@ -31,3 +31,14 @@ export const TakeAttendanceSchema = z.object({
     .max(500),
 });
 export type TakeAttendanceInput = z.infer<typeof TakeAttendanceSchema>;
+
+const DateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const CohortWorkspaceQuerySchema = z
+  .object({
+    from: DateOnlySchema.optional(),
+    to: DateOnlySchema.optional(),
+  })
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: '`from` must be on or before `to`',
+  });
+export type CohortWorkspaceQuery = z.infer<typeof CohortWorkspaceQuerySchema>;

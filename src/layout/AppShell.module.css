@@ -36,6 +36,14 @@
   cursor: pointer;
   margin-left: auto;
   color: var(--sf-muted);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  align-items: center;
+  justify-content: center;
+}
+.sideClose:hover {
+  background: var(--sf-surface-2);
 }
 
 .brand {
@@ -43,7 +51,20 @@
   align-items: center;
   gap: 10px;
   padding: 6px 8px 12px;
+}
+.brandLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 .brandText {
   flex: 1;
@@ -487,7 +508,7 @@
     gap: 2px;
   }
   .main {
-    padding: 18px 14px 80px;
+    padding: 18px 14px calc(96px + env(safe-area-inset-bottom));
   }
   .tabs {
     display: flex;
@@ -497,7 +518,7 @@
     right: 0;
     background: var(--sf-surface);
     border-top: 1px solid var(--sf-border);
-    padding: 8px 4px 14px;
+    padding: 8px 4px calc(14px + env(safe-area-inset-bottom));
     z-index: 30;
   }
   .tab {

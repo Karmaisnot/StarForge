@@ -130,3 +130,9 @@
   font-weight: 600;
   color: var(--sf-ink);
 }
+
+@media (max-width: 767px) {
+  .fabWrap {
+    display: none;
+  }
+}

@@ -228,6 +228,14 @@ export function SettingsPage() {
     });
   };
 
+  const changeLanguage = (next) => {
+    if (next === locale) return;
+
+    setLocale(next);
+    toast(LANG_LABELS[next]);
+    account.patchSettings({ locale: next }).catch(() => toast(t('common.error'), 'error'));
+  };
+
   // Persist theme palette/dark changes. ThemeControls mutates the theme context
   // directly (we cannot edit it), so we observe palette/dark here and patch the
   // changed field, skipping the initial mount and the server-driven hydration.
@@ -331,26 +339,28 @@ export function SettingsPage() {
 
           <Card title={t('settings.language')}>
             <div className={styles.langRow}>
-              <Icon name="globe" size={18} />
-              <select
-                className={styles.select}
-                aria-label={t('settings.language')}
-                value={locale}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setLocale(next);
-                  toast(LANG_LABELS[next]);
-                  account
-                    .patchSettings({ locale: next })
-                    .catch(() => toast(t('common.error'), 'error'));
-                }}
-              >
-                {locales.map((l) => (
-                  <option key={l} value={l}>
-                    {LANG_LABELS[l]}
-                  </option>
-                ))}
-              </select>
+              <span className={styles.langBadge} aria-hidden="true">
+                <Icon name="globe" size={18} />
+              </span>
+              <div className={styles.languagePicker} role="group" aria-label={t('settings.language')}>
+                {locales.map((next) => {
+                  const active = locale === next;
+                  return (
+                    <button
+                      key={next}
+                      type="button"
+                      className={`${styles.languageOption} ${active ? styles.languageOptionActive : ''}`}
+                      aria-label={LANG_LABELS[next]}
+                      aria-pressed={active}
+                      onClick={() => changeLanguage(next)}
+                    >
+                      <span className={styles.languageCode}>{next.toUpperCase()}</span>
+                      <span className={styles.languageName}>{LANG_LABELS[next]}</span>
+                      {active && <Icon name="check" size={13} className={styles.languageCheck} />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </Card>
 

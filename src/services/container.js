@@ -38,6 +38,26 @@ import {
   HttpAcademicRepository,
   HttpOperationsRepository,
 } from '@/data/repositories/http/index.js';
+import {
+  LocalAccountRepository,
+  LocalCohortRepository,
+  LocalCardRepository,
+  LocalTaskRepository,
+  LocalDashboardRepository,
+  LocalAiRepository,
+  LocalPrintRepository,
+  LocalSurveyRepository,
+  LocalMgmtRepository,
+  LocalNotificationRepository,
+  LocalMaterialRepository,
+  LocalNavigationRepository,
+  LocalWorkRepository,
+  LocalFinanceRepository,
+  LocalPeopleRepository,
+  LocalAcademicRepository,
+  LocalOperationsRepository,
+} from '@/data/repositories/local/index.js';
+import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 
 import { AccountService } from './AccountService.js';
 import { CohortService } from './CohortService.js';
@@ -57,10 +77,8 @@ import { PeopleService } from './PeopleService.js';
 import { AcademicService } from './AcademicService.js';
 import { OperationsService } from './OperationsService.js';
 
-const USE_MOCK = import.meta.env?.VITE_USE_MOCK !== 'false';
-
 function buildRepositories() {
-  if (USE_MOCK) {
+  if (DATA_SOURCE === 'mock') {
     return {
       accountRepo: new MockAccountRepository(),
       cohortRepo: new MockCohortRepository(),
@@ -79,6 +97,27 @@ function buildRepositories() {
       academicRepo: new MockAcademicRepository(),
       operationsRepo: new MockOperationsRepository(),
       navRepo: null, // mock mode: NavigationService falls back to the fixture
+    };
+  }
+  if (DATA_SOURCE === 'local') {
+    return {
+      accountRepo: new LocalAccountRepository(),
+      cohortRepo: new LocalCohortRepository(),
+      cardRepo: new LocalCardRepository(),
+      taskRepo: new LocalTaskRepository(),
+      dashboardRepo: new LocalDashboardRepository(),
+      aiRepo: new LocalAiRepository(),
+      printRepo: new LocalPrintRepository(),
+      surveyRepo: new LocalSurveyRepository(),
+      mgmtRepo: new LocalMgmtRepository(),
+      notificationRepo: new LocalNotificationRepository(),
+      materialRepo: new LocalMaterialRepository(),
+      workRepo: new LocalWorkRepository(),
+      financeRepo: new LocalFinanceRepository(),
+      peopleRepo: new LocalPeopleRepository(),
+      academicRepo: new LocalAcademicRepository(),
+      operationsRepo: new LocalOperationsRepository(),
+      navRepo: new LocalNavigationRepository(),
     };
   }
   return {

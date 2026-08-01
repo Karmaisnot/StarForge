@@ -2,7 +2,7 @@ import type { AuthContext } from '../../http/plugins/auth';
 import { NotFoundError } from '../../shared/errors';
 import type { MgmtRepository } from './mgmt.repository';
 import { mapThread, mapMessage } from './mgmt.mapper';
-import type { CreateThreadInput, SendMessageInput } from './mgmt.schemas';
+import type { ArchiveThreadInput, CreateThreadInput, SendMessageInput } from './mgmt.schemas';
 
 /** Management-chat read use-cases with computed thread previews. */
 export class MgmtService {
@@ -67,5 +67,21 @@ export class MgmtService {
     if (!thread) throw new NotFoundError('Thread');
     await this.repo.markInboundRead(thread.id);
     return { ok: true as const };
+  }
+
+  /** Hide or restore a conversation without destroying its transcript. */
+  async archiveThread(ctx: AuthContext, threadId: string, input: ArchiveThreadInput) {
+    const thread = await this.repo.getThread(threadId, ctx.academyId, ctx.teacherId);
+    if (!thread) throw new NotFoundError('Thread');
+    await this.repo.setArchived(thread.id, input.archived);
+    return { id: thread.id, archived: input.archived };
+  }
+
+  /** Soft-delete keeps audit data while removing the conversation from this teacher's workspace. */
+  async deleteThread(ctx: AuthContext, threadId: string) {
+    const thread = await this.repo.getThread(threadId, ctx.academyId, ctx.teacherId);
+    if (!thread) throw new NotFoundError('Thread');
+    await this.repo.softDelete(thread.id);
+    return { id: thread.id, deleted: true as const };
   }
 }

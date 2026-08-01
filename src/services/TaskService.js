@@ -16,11 +16,14 @@ export class TaskService {
   setState(id, state) {
     return this.taskRepo.setState(id, state);
   }
+  move(id, state, targetIndex) {
+    return this.taskRepo.move(id, state, targetIndex);
+  }
   /**
    * Persist a new task. The backend always creates in the `todo` column, so when
    * the caller wants a different column it must follow up with setState (the page
    * does this with the returned id). Returns the created task DTO.
-   * @param {{title:string, priority?:string, projectId?:string, deadlineLabel?:string, urgent?:boolean, fromMgmt?:boolean}} draft
+   * @param {{title:string, priority?:string, projectId?:string, deadlineLabel?:string, deadlineAt?:string, urgent?:boolean, fromMgmt?:boolean}} draft
    */
   create(draft) {
     return this.taskRepo.create(draft);

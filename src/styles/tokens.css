@@ -42,6 +42,13 @@
   --sf-ai-bg: linear-gradient(135deg, #f9eac4 0%, #f6dcb0 100%);
   --sf-ai-border: #e2bc72;
 
+  /* Theme-aware feature heroes. Never assume a dark background in light mode. */
+  --sf-hero-bg: linear-gradient(135deg, var(--sf-surface) 0%, var(--sf-primary-soft) 100%);
+  --sf-hero-ink: var(--sf-ink);
+  --sf-hero-ink-2: var(--sf-ink-2);
+  --sf-hero-border: color-mix(in srgb, var(--sf-primary) 28%, var(--sf-border));
+  --sf-hero-glow: color-mix(in srgb, var(--sf-accent-soft) 72%, transparent);
+
   --sf-shadow-sm: 0 1px 2px rgba(54, 30, 14, 0.06);
   --sf-shadow-md: 0 6px 18px rgba(54, 30, 14, 0.08), 0 2px 4px rgba(54, 30, 14, 0.04);
   --sf-shadow-lg: 0 18px 40px rgba(54, 30, 14, 0.12), 0 4px 10px rgba(54, 30, 14, 0.06);
@@ -165,6 +172,12 @@
   --sf-ai: #f0cb7f;
   --sf-ai-bg: linear-gradient(135deg, #2d241b 0%, #3a2d1e 100%);
   --sf-ai-border: #66502a;
+
+  --sf-hero-bg: linear-gradient(135deg, #211b15 0%, var(--sf-primary-soft) 100%);
+  --sf-hero-ink: var(--sf-ink);
+  --sf-hero-ink-2: var(--sf-ink-2);
+  --sf-hero-border: var(--sf-border-strong);
+  --sf-hero-glow: color-mix(in srgb, var(--sf-accent) 18%, transparent);
 
   --sf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sf-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);

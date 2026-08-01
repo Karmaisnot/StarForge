@@ -1,4 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
 import { Avatar, Button, Card, Chip, FilterChip, Icon, Modal, Segmented, ViewSwitcher } from '@/ui';
@@ -18,20 +35,16 @@ const PREDICATES = {
   done: (t) => t.state === 'done',
 };
 
-function TaskCard({ task, onToggle }) {
+const sortableId = (id) => `task:${id}`;
+
+function TaskCard({ task, onToggle, handleProps, style, dragging = false, setNodeRef }) {
   const { t } = useT();
   return (
-    <div
+    <article
+      ref={setNodeRef}
       className={styles.taskCard}
-      role="button"
-      tabIndex={0}
-      onClick={() => onToggle(task)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggle(task);
-        }
-      }}
+      style={style}
+      data-dragging={dragging ? '1' : '0'}
     >
       <div
         className={styles.taskRailV}
@@ -39,6 +52,14 @@ function TaskCard({ task, onToggle }) {
       />
       <div className={styles.taskCardInner}>
         <div className={styles.taskCardTop}>
+          <button
+            type="button"
+            className={styles.dragHandle}
+            aria-label={`${t('tasks.toggleState')} · ${task.title}`}
+            {...handleProps}
+          >
+            <Icon name="more" size={14} />
+          </button>
           {task.fromMgmt && <Chip tone="ink">{t('common.mgmtShort')}</Chip>}
           <Chip>
             <span className={styles.projDot} style={{ background: task.projectColor }} />
@@ -79,45 +100,149 @@ function TaskCard({ task, onToggle }) {
           >
             {task.deadline}
           </span>
+          <button
+            type="button"
+            className={styles.advanceTask}
+            onClick={() => onToggle(task)}
+            aria-label={t('tasks.toggleState')}
+          >
+            <Icon name="arrowR" size={12} />
+          </button>
         </div>
       </div>
+    </article>
+  );
+}
+
+function SortableTask({ task, onToggle }) {
+  const sortable = useSortable({
+    id: sortableId(task.id),
+    data: { type: 'task', task, state: task.state },
+  });
+  const style = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+  };
+  return (
+    <TaskCard
+      task={task}
+      onToggle={onToggle}
+      style={style}
+      dragging={sortable.isDragging}
+      setNodeRef={sortable.setNodeRef}
+      handleProps={{
+        ...sortable.attributes,
+        ...sortable.listeners,
+        ref: sortable.setActivatorNodeRef,
+      }}
+    />
+  );
+}
+
+function KanbanColumn({ column, tasks, onToggle, onAdd }) {
+  const { t } = useT();
+  const droppable = useDroppable({
+    id: `column:${column.id}`,
+    data: { type: 'column', state: column.id },
+  });
+  return (
+    <div
+      ref={droppable.setNodeRef}
+      className={styles.kanbanCol}
+      data-over={droppable.isOver ? '1' : '0'}
+    >
+      <div className={styles.kanbanHead}>
+        <span className={styles.kanbanDot} style={{ background: column.color }} />
+        <span className={styles.kanbanName}>{column.label}</span>
+        <span className={styles.kanbanCount}>{tasks.length}</span>
+        <span style={{ flex: 1 }} />
+        <button
+          className={styles.iconBtn}
+          aria-label={t('common.add')}
+          onClick={() => onAdd?.(column.id)}
+        >
+          <Icon name="plus" size={14} />
+        </button>
+      </div>
+      <SortableContext
+        id={column.id}
+        items={tasks.map((task) => sortableId(task.id))}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className={styles.kanbanCards}>
+          {tasks.map((task) => (
+            <SortableTask key={task.id} task={task} onToggle={onToggle} />
+          ))}
+          {tasks.length === 0 && <div className={styles.kanbanEmpty}>{t('tasks.empty')}</div>}
+        </div>
+      </SortableContext>
     </div>
   );
 }
 
-function KanbanBoard({ columns, tasks, onToggle, onAdd }) {
-  const { t } = useT();
+function KanbanBoard({ columns, tasks, onToggle, onAdd, onMove }) {
+  const [activeTask, setActiveTask] = useState(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const endDrag = ({ active, over }) => {
+    setActiveTask(null);
+    if (!over) return;
+    const task = active.data.current?.task;
+    if (!task) return;
+    const targetState = over.data.current?.state ?? over.data.current?.sortable?.containerId;
+    if (!targetState) return;
+    const targetTasks = tasks.filter((item) => item.state === targetState);
+    const overTaskId = over.data.current?.task?.id;
+    const targetIndex =
+      overTaskId == null
+        ? targetTasks.length
+        : Math.max(
+            0,
+            targetTasks.findIndex((item) => String(item.id) === String(overTaskId)),
+          );
+    onMove(task, targetState, targetIndex);
+  };
+
   return (
-    <div className={styles.kanban}>
-      {columns.map((col) => {
-        const colTasks = tasks.filter((t) => t.state === col.id);
-        return (
-          <div key={col.id} className={styles.kanbanCol}>
-            <div className={styles.kanbanHead}>
-              <span className={styles.kanbanDot} style={{ background: col.color }} />
-              <span className={styles.kanbanName}>{col.label}</span>
-              <span className={styles.kanbanCount}>{colTasks.length}</span>
-              <span style={{ flex: 1 }} />
-              <button
-                className={styles.iconBtn}
-                aria-label={t('common.add')}
-                onClick={() => onAdd?.(col.id)}
-              >
-                <Icon name="plus" size={14} />
-              </button>
-            </div>
-            <div className={styles.kanbanCards}>
-              {colTasks.map((t) => (
-                <TaskCard key={t.id} task={t} onToggle={onToggle} />
-              ))}
-              {colTasks.length === 0 && (
-                <div className={styles.kanbanEmpty}>{t('tasks.empty')}</div>
-              )}
-            </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={({ active }) => setActiveTask(active.data.current?.task ?? null)}
+      onDragCancel={() => setActiveTask(null)}
+      onDragEnd={endDrag}
+      accessibility={{
+        announcements: {
+          onDragStart: ({ active }) => `Picked up ${active.data.current?.task?.title ?? 'task'}`,
+          onDragOver: ({ over }) =>
+            over ? `Moving over ${over.data.current?.state ?? 'task'}` : 'Outside board',
+          onDragEnd: ({ over }) =>
+            over ? `Task moved to ${over.data.current?.state ?? 'new position'}` : 'Move cancelled',
+          onDragCancel: () => 'Move cancelled',
+        },
+      }}
+    >
+      <div className={styles.kanban}>
+        {columns.map((column) => (
+          <KanbanColumn
+            key={column.id}
+            column={column}
+            tasks={tasks.filter((task) => task.state === column.id)}
+            onToggle={onToggle}
+            onAdd={onAdd}
+          />
+        ))}
+      </div>
+      <DragOverlay>
+        {activeTask ? (
+          <div className={styles.dragOverlay}>
+            <TaskCard task={activeTask} onToggle={() => {}} />
           </div>
-        );
-      })}
-    </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -206,29 +331,56 @@ function TaskListView({ columns, tasks, onToggle }) {
   );
 }
 
-// Deadlines in fixtures are fuzzy display strings; we only place the ones that
-// carry an explicit "DD.MM" into the grid, everything else lands in "Unscheduled".
-function parseDeadline(deadline) {
+// Structured dates are authoritative; legacy DD.MM labels remain a safe fallback.
+function parseDeadline(task) {
+  if (task?.deadlineAt) {
+    const date = new Date(task.deadlineAt);
+    if (!Number.isNaN(date.getTime())) {
+      return { day: date.getDate(), month: date.getMonth() + 1, year: date.getFullYear() };
+    }
+  }
+  const deadline = task?.deadline;
   const m = typeof deadline === 'string' && deadline.match(/(\d{2})\.(\d{2})/);
   if (!m) return null;
-  return { day: Number(m[1]), month: Number(m[2]) };
+  return { day: Number(m[1]), month: Number(m[2]), year: new Date().getFullYear() };
 }
+
+const CALENDAR_COPY = {
+  en: 'Leave a little room for rest—steady work wins the month.',
+  ru: 'Оставьте немного места для отдыха — стабильный ритм выигрывает месяц.',
+  uz: 'Dam olishga ham joy qoldiring — barqaror ritm oyni yutadi.',
+};
+
+const HOLIDAYS = {
+  '1-1': { en: 'New Year', ru: 'Новый год', uz: 'Yangi yil' },
+  '3-8': { en: 'Women’s Day', ru: 'Женский день', uz: 'Xotin-qizlar kuni' },
+  '3-21': { en: 'Navruz', ru: 'Навруз', uz: 'Navro‘z' },
+  '5-9': { en: 'Day of Memory', ru: 'День памяти', uz: 'Xotira kuni' },
+  '9-1': { en: 'Independence Day', ru: 'День независимости', uz: 'Mustaqillik kuni' },
+  '10-1': { en: 'Teachers’ Day', ru: 'День учителя', uz: 'Ustozlar kuni' },
+  '12-8': { en: 'Constitution Day', ru: 'День Конституции', uz: 'Konstitutsiya kuni' },
+};
 
 function CalendarView({ tasks, onToggle }) {
   const { t, locale } = useT();
   const weekdays = t('tasks.weekdays');
   // Anchor the calendar on the month that actually holds the most dated tasks,
   // so the view is useful on first render instead of landing on an empty month.
-  const dated = tasks.map((task) => ({ task, d: parseDeadline(task.deadline) })).filter((x) => x.d);
+  const dated = tasks.map((task) => ({ task, d: parseDeadline(task) })).filter((x) => x.d);
   const initial = useMemo(() => {
     if (dated.length === 0) {
       const now = new Date();
       return { year: now.getFullYear(), month: now.getMonth() + 1 };
     }
     const counts = {};
-    for (const { d } of dated) counts[d.month] = (counts[d.month] ?? 0) + 1;
-    const month = Number(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]);
-    return { year: new Date().getFullYear(), month };
+    for (const { d } of dated) {
+      const key = `${d.year}-${d.month}`;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    const [year, month] = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])[0][0]
+      .split('-');
+    return { year: Number(year), month: Number(month) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [cursor, setCursor] = useState(initial);
@@ -242,12 +394,12 @@ function CalendarView({ tasks, onToggle }) {
   const byDay = {};
   const unscheduled = [];
   for (const task of tasks) {
-    const d = parseDeadline(task.deadline);
+    const d = parseDeadline(task);
     // Guard the parsed day against the month length so a task with an
     // impossible day (e.g. "31.02") lands in Unscheduled instead of vanishing.
-    if (d && d.month === month && d.day >= 1 && d.day <= daysInMonth) {
+    if (d && d.year === year && d.month === month && d.day >= 1 && d.day <= daysInMonth) {
       (byDay[d.day] ??= []).push(task);
-    } else if (!d || d.month === month) {
+    } else if (!d || (d.year === year && d.month === month)) {
       unscheduled.push(task);
     }
   }
@@ -282,34 +434,49 @@ function CalendarView({ tasks, onToggle }) {
           <Icon name="chevR" size={16} />
         </button>
       </div>
+      <div className={styles.calMotivation}>
+        <Icon name="brand" size={15} />
+        <span>{CALENDAR_COPY[locale] ?? CALENDAR_COPY.en}</span>
+      </div>
       <div className={styles.calWeekdays}>
         {weekdays.map((w) => (
           <div key={w}>{w}</div>
         ))}
       </div>
       <div className={styles.calGrid}>
-        {cells.map((day, i) => (
-          <div key={i} className={`${styles.calCell} ${day ? '' : styles.calEmpty}`}>
-            {day && <div className={styles.calDay}>{day}</div>}
-            {(byDay[day] ?? []).map((task) => (
-              <button
-                key={task.id}
-                className={styles.calTask}
-                style={{ borderLeftColor: task.urgent ? 'var(--sf-danger)' : task.projectColor }}
-                onClick={() => onToggle(task)}
-                title={task.title}
-              >
-                <span
-                  className="sf-mono"
-                  style={{ color: priorityColor(task.priority), fontWeight: 700 }}
+        {cells.map((day, i) => {
+          const holiday = day ? HOLIDAYS[`${month}-${day}`]?.[locale] : null;
+          return (
+            <div
+              key={i}
+              className={`${styles.calCell} ${day ? '' : styles.calEmpty} ${holiday ? styles.calHoliday : ''}`}
+            >
+              {day && (
+                <div className={styles.calDay}>
+                  <span>{day}</span>
+                  {holiday && <small title={holiday}>{holiday}</small>}
+                </div>
+              )}
+              {(byDay[day] ?? []).map((task) => (
+                <button
+                  key={task.id}
+                  className={styles.calTask}
+                  style={{ borderLeftColor: task.urgent ? 'var(--sf-danger)' : task.projectColor }}
+                  onClick={() => onToggle(task)}
+                  title={task.title}
                 >
-                  {task.priority}
-                </span>{' '}
-                {task.title}
-              </button>
-            ))}
-          </div>
-        ))}
+                  <span
+                    className="sf-mono"
+                    style={{ color: priorityColor(task.priority), fontWeight: 700 }}
+                  >
+                    {task.priority}
+                  </span>{' '}
+                  {task.title}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
       {unscheduled.length > 0 && (
         <div className={styles.calUnsched}>
@@ -342,7 +509,7 @@ function CalendarView({ tasks, onToggle }) {
 }
 
 function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const [title, setTitle] = useState('');
   const [project, setProject] = useState('');
   const [priority, setPriority] = useState('P2');
@@ -367,7 +534,15 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
       project: project || projects[0] || t('tasks.project'),
       priority,
       state,
-      deadline: deadline.trim() || '—',
+      deadline: deadline
+        ? new Intl.DateTimeFormat(locale, {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(new Date(deadline))
+        : '—',
+      deadlineAt: deadline ? new Date(deadline).toISOString() : null,
     });
     setTitle('');
     setProject('');
@@ -439,10 +614,10 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
         <label className={styles.field}>
           <span>{t('tasks.cDeadline')}</span>
           <input
+            type="datetime-local"
             className={styles.inputCtl}
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
-            placeholder="22.05 · 18:00"
           />
         </label>
       </form>
@@ -482,10 +657,15 @@ export function TasksPage() {
 
   const tasks = useMemo(() => {
     return baseTasks
-      .map((t) => (overrides[t.id] ? { ...t, state: overrides[t.id] } : t))
+      .map((task, index) => ({
+        ...task,
+        position: task.position ?? index,
+        ...(overrides[task.id] ?? {}),
+      }))
       .filter(PREDICATES[filter] ?? PREDICATES.all)
       .filter((t) => !projectFilter || t.project === projectFilter)
-      .filter((t) => !priorityFilter || t.priority === priorityFilter);
+      .filter((t) => !priorityFilter || t.priority === priorityFilter)
+      .sort((a, b) => a.position - b.position);
   }, [baseTasks, overrides, filter, projectFilter, priorityFilter]);
   const openTaskCount = baseTasks.filter((task) => task.state !== 'done').length;
 
@@ -496,7 +676,7 @@ export function TasksPage() {
     const order = ['todo', 'doing', 'review', 'done'];
     const prev = task.state;
     const next = order[(order.indexOf(prev) + 1) % order.length];
-    setOverrides((o) => ({ ...o, [task.id]: next }));
+    setOverrides((o) => ({ ...o, [task.id]: { ...(o[task.id] ?? {}), state: next } }));
     toast(`“${String(task.title).slice(0, 22)}…” → ${next}`);
     try {
       await taskService.setState(task.id, next);
@@ -510,7 +690,60 @@ export function TasksPage() {
       refetch();
     } catch {
       // Roll the optimistic move back and surface the failure.
-      setOverrides((o) => ({ ...o, [task.id]: prev }));
+      setOverrides((o) => ({ ...o, [task.id]: { ...(o[task.id] ?? {}), state: prev } }));
+      toast(t('common.error'), 'danger');
+    } finally {
+      pendingTransitions.current.delete(task.id);
+    }
+  };
+
+  const moveTask = async (task, targetState, targetIndex) => {
+    if (pendingTransitions.current.size > 0) return;
+    pendingTransitions.current.add(task.id);
+    const before = overrides;
+    const effective = baseTasks.map((item, index) => ({
+      ...item,
+      position: item.position ?? index,
+      ...(overrides[item.id] ?? {}),
+    }));
+    const moving = effective.find((item) => String(item.id) === String(task.id));
+    if (!moving) {
+      pendingTransitions.current.delete(task.id);
+      return;
+    }
+    const sourceState = moving.state;
+    const source = effective
+      .filter((item) => item.state === sourceState && String(item.id) !== String(moving.id))
+      .sort((a, b) => a.position - b.position);
+    const target = (
+      sourceState === targetState
+        ? source
+        : effective.filter(
+            (item) => item.state === targetState && String(item.id) !== String(moving.id),
+          )
+    ).sort((a, b) => a.position - b.position);
+    target.splice(Math.max(0, Math.min(target.length, targetIndex)), 0, {
+      ...moving,
+      state: targetState,
+    });
+
+    const next = { ...overrides };
+    if (sourceState !== targetState) {
+      source.forEach((item, position) => {
+        next[item.id] = { ...(next[item.id] ?? {}), state: sourceState, position };
+      });
+    }
+    target.forEach((item, position) => {
+      next[item.id] = { ...(next[item.id] ?? {}), state: targetState, position };
+    });
+    setOverrides(next);
+    toast(`“${String(moving.title).slice(0, 24)}” → ${targetState}`, 'success');
+    try {
+      await taskService.move(moving.id, targetState, targetIndex);
+      setOverrides({});
+      refetch();
+    } catch {
+      setOverrides(before);
       toast(t('common.error'), 'danger');
     } finally {
       pendingTransitions.current.delete(task.id);
@@ -541,6 +774,7 @@ export function TasksPage() {
         title: draft.title,
         priority: draft.priority,
         ...(draft.deadline && draft.deadline !== '—' ? { deadlineLabel: draft.deadline } : {}),
+        ...(draft.deadlineAt ? { deadlineAt: draft.deadlineAt } : {}),
       });
       // If the modal targeted a non-todo column, move the just-created task there.
       if (created?.id != null && draft.state && draft.state !== 'todo') {
@@ -616,6 +850,7 @@ export function TasksPage() {
               tasks={tasks}
               onToggle={cycle}
               onAdd={(colId) => setModal({ presetState: colId })}
+              onMove={moveTask}
             />
           ) : view === 'list' ? (
             <TaskListView columns={d.columns} tasks={tasks} onToggle={cycle} />

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useServices } from '@/hooks/useServices.js';
-import { useAsync } from '@/hooks/useAsync.js';
 import { useTeacher } from '@/hooks/data.js';
 import { useT } from '@/hooks/useT.js';
 import { ALL_NAV } from './navConfig.js';
@@ -22,6 +22,9 @@ export function AppShell() {
   const { t, locale, setLocale } = useT();
   const { ai, navigation } = useServices();
 
+  const openDrawer = useCallback(() => setDrawer(true), []);
+  const closeDrawer = useCallback(() => setDrawer(false), []);
+
   // Global ⌘K / Ctrl+K opens the command palette from anywhere in the app.
   useEffect(() => {
     const onKey = (e) => {
@@ -34,6 +37,17 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Prevent the page beneath the mobile drawer from scrolling while the
+  // navigation is open.
+  useEffect(() => {
+    if (!drawer) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [drawer]);
+
   const teacherState = useTeacher();
   const teacher = teacherState.data;
   const languageHydrated = useRef(false);
@@ -44,14 +58,16 @@ export function AppShell() {
       setLocale(teacher.preferredLanguage);
     }
   }, [teacher, locale, setLocale]);
-  const { data: badges } = useAsync(
-    () => (teacher ? navigation.getBadges() : Promise.resolve({})),
-    [teacher?.id],
-  );
-  const { data: aiUsage } = useAsync(
-    () => (teacher?.roleKey === 'teacher' ? ai.getUsage() : Promise.resolve(null)),
-    [teacher?.roleKey],
-  );
+  const { data: badges } = useQuery({
+    queryKey: ['navigation', 'badges', teacher?.id],
+    queryFn: () => navigation.getBadges(),
+    enabled: Boolean(teacher),
+  });
+  const { data: aiUsage } = useQuery({
+    queryKey: ['ai', 'usage', teacher?.id],
+    queryFn: () => ai.getUsage(),
+    enabled: teacher?.roleKey === 'teacher',
+  });
 
   const current = ALL_NAV.find((n) => pathname.startsWith(n.path));
   const title = current ? t(`nav.${current.id}`) : 'StarForge';
@@ -81,15 +97,16 @@ export function AppShell() {
         badges={badges ?? {}}
         aiUsage={aiUsage}
         open={drawer}
-        onClose={() => setDrawer(false)}
+        onClose={closeDrawer}
       />
-      {drawer && <div className={styles.scrim} onClick={() => setDrawer(false)} />}
+      {drawer && <div className={styles.scrim} aria-hidden="true" onClick={closeDrawer} />}
 
       <div className={styles.col}>
         <TopBar
           title={title}
           teacher={teacher}
-          onOpenDrawer={() => setDrawer(true)}
+          drawerOpen={drawer}
+          onOpenDrawer={openDrawer}
           onOpenSearch={() => setPaletteOpen(true)}
         />
         <main className={styles.main}>

@@ -17,14 +17,16 @@ export class MgmtRepository {
 
   listThreads(academyId: string, teacherId: string): Promise<MgmtThread[]> {
     return this.db.mgmtThread.findMany({
-      where: { academyId, teacherId },
+      where: { academyId, teacherId, deletedAt: null },
       orderBy: [{ pinned: 'desc' }, { createdAt: 'asc' }],
     });
   }
 
   /** Confirms a thread belongs to the tenant + teacher before exposing its transcript. */
   getThread(threadId: string, academyId: string, teacherId: string): Promise<MgmtThread | null> {
-    return this.db.mgmtThread.findFirst({ where: { id: threadId, academyId, teacherId } });
+    return this.db.mgmtThread.findFirst({
+      where: { id: threadId, academyId, teacherId, deletedAt: null },
+    });
   }
 
   /** Append a single outbound message to a thread (read=true: the teacher authored it). */
@@ -64,6 +66,22 @@ export class MgmtRepository {
     const { count } = await this.db.mgmtMessage.updateMany({
       where: { threadId, dir: 'in', read: false },
       data: { read: true },
+    });
+    return count;
+  }
+
+  async setArchived(threadId: string, archived: boolean): Promise<number> {
+    const { count } = await this.db.mgmtThread.updateMany({
+      where: { id: threadId, deletedAt: null },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+    return count;
+  }
+
+  async softDelete(threadId: string): Promise<number> {
+    const { count } = await this.db.mgmtThread.updateMany({
+      where: { id: threadId, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
     return count;
   }

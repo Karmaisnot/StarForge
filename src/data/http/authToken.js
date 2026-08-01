@@ -1,7 +1,7 @@
 // Session handling for the external Starforge API. Its access token is opaque:
 // it cannot be refreshed or decoded client-side, so a 401 always means re-login.
 import { getLocale } from '@/i18n/locale.js';
-import { apiUrl } from './apiConfig.js';
+import { apiUrl, isLocalApiMode } from './apiConfig.js';
 import { ApiError } from './apiError.js';
 
 const STORAGE_KEY = 'sf-session-access';
@@ -11,7 +11,12 @@ const AUTH_EVENT = 'sf:auth-changed';
 // backend. Keep the old bridge login available only as an explicit compatibility
 // override instead of silently sending every role account to the wrong endpoint.
 const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT || 'role-login';
-const LOGIN_PATH = AUTH_ENDPOINT === 'legacy-login' ? 'auth/login/' : 'auth/role-login/';
+const LOGIN_PATH = isLocalApiMode()
+  ? 'auth/login'
+  : AUTH_ENDPOINT === 'legacy-login'
+    ? 'auth/login/'
+    : 'auth/role-login/';
+const LOGOUT_PATH = isLocalApiMode() ? 'auth/logout' : 'auth/logout/';
 
 let token = readStorage(STORAGE_KEY);
 
@@ -49,7 +54,8 @@ function stableDeviceId() {
   const existing = readStorage(DEVICE_KEY);
   if (existing) return existing;
 
-  const value = globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const value =
+    globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   writeStorage(DEVICE_KEY, value);
   return value;
 }
@@ -92,7 +98,13 @@ export async function login({ username, password }) {
   const payload = await parsePayload(response);
 
   if (!response.ok || payload?.success === false) {
-    throw new ApiError(response.status, 'POST', LOGIN_PATH, payload, response.headers.get('Retry-After'));
+    throw new ApiError(
+      response.status,
+      'POST',
+      LOGIN_PATH,
+      payload,
+      response.headers.get('Retry-After'),
+    );
   }
 
   const data = unwrap(payload);
@@ -114,7 +126,7 @@ export async function logout() {
   if (!current) return;
 
   try {
-    const response = await fetch(apiUrl('auth/logout/'), {
+    const response = await fetch(apiUrl(LOGOUT_PATH), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${current}`,
@@ -123,7 +135,13 @@ export async function logout() {
     });
     const payload = response.status === 204 ? null : await parsePayload(response);
     if (!response.ok && response.status !== 401) {
-      throw new ApiError(response.status, 'POST', 'auth/logout/', payload, response.headers.get('Retry-After'));
+      throw new ApiError(
+        response.status,
+        'POST',
+        LOGOUT_PATH,
+        payload,
+        response.headers.get('Retry-After'),
+      );
     }
   } finally {
     clearToken();

@@ -1,8 +1,8 @@
 import type { AuthContext } from '../../http/plugins/auth';
-import { NotFoundError } from '../../shared/errors';
+import { BusinessRuleError, NotFoundError } from '../../shared/errors';
 import type { SurveyRepository } from './survey.repository';
 import { mapActiveSurvey, mapHistorySurvey } from './survey.mapper';
-import type { SubmitSurveyInput } from './survey.schemas';
+import type { SaveSurveyDraftInput, SubmitSurveyInput } from './survey.schemas';
 
 /**
  * Survey read use-cases. Active vs. history is decided per-teacher: a survey is
@@ -42,6 +42,54 @@ export class SurveyService {
     return out;
   }
 
+  async getDetail(ctx: AuthContext, surveyId: string) {
+    const [survey, response] = await Promise.all([
+      this.repo.getSurveyDetail(surveyId, ctx.academyId),
+      this.repo.getResponse(surveyId, ctx.teacherId),
+    ]);
+    if (!survey || (response && response.status !== 'draft')) return null;
+    const summary = mapActiveSurvey(
+      survey,
+      response?.status === 'draft' ? response.progress : 0,
+      new Date(),
+    );
+    return {
+      ...summary,
+      questions: survey.questionItems.map((question) => ({
+        id: question.id,
+        kind: question.kind,
+        prompt: question.prompt,
+        description: question.description,
+        options: question.options,
+        required: question.required,
+      })),
+      draft: {
+        answers:
+          response?.status === 'draft' && response.answers && typeof response.answers === 'object'
+            ? response.answers
+            : {},
+        progress: response?.status === 'draft' ? response.progress : 0,
+      },
+    };
+  }
+
+  async saveDraft(ctx: AuthContext, surveyId: string, input: SaveSurveyDraftInput) {
+    const survey = await this.repo.getSurveyDetail(surveyId, ctx.academyId);
+    if (!survey) throw new NotFoundError('Survey');
+    validateAnswers(survey.questionItems, input.answers);
+    const answered = survey.questionItems.filter((question) =>
+      answerPresent(input.answers[question.id]),
+    ).length;
+    const progress = survey.questionItems.length
+      ? Math.round((answered / survey.questionItems.length) * 100)
+      : input.progress;
+    await this.repo.upsertDraft(survey.id, ctx.teacherId, {
+      answers: input.answers,
+      progress,
+    });
+    return { id: survey.id, answers: input.answers, progress };
+  }
+
   /**
    * Finalise a survey for this teacher as *submitted*. Idempotent: re-submitting
    * overwrites the same (surveyId, teacherId) row, never duplicating. The survey
@@ -49,12 +97,25 @@ export class SurveyService {
    * frontend can move the survey from the active list into history in one step.
    */
   async submit(ctx: AuthContext, surveyId: string, input: SubmitSurveyInput) {
-    const survey = await this.repo.getSurvey(surveyId, ctx.academyId);
+    const survey = await this.repo.getSurveyDetail(surveyId, ctx.academyId);
     if (!survey) throw new NotFoundError('Survey');
+    validateAnswers(survey.questionItems, input.answers);
+    const missingRequired = survey.questionItems.some(
+      (question) => question.required && !answerPresent(input.answers[question.id]),
+    );
+    if (missingRequired) throw new BusinessRuleError('Complete every required survey question');
+    const values = Object.values(input.answers);
+    const inferredRating = values.find(
+      (value): value is number => typeof value === 'number' && value >= 1 && value <= 5,
+    );
+    const inferredComment = values.find(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
     const response = await this.repo.upsertResponse(surveyId, ctx.teacherId, {
       status: 'submitted',
-      rating: input.rating,
-      comment: input.comment ?? null,
+      rating: input.rating ?? inferredRating ?? null,
+      comment: input.comment ?? inferredComment ?? null,
+      answers: input.answers,
     });
     return mapHistorySurvey(survey, response);
   }
@@ -70,7 +131,54 @@ export class SurveyService {
       status: 'skipped',
       rating: null,
       comment: null,
+      answers: {},
     });
     return mapHistorySurvey(survey, response);
   }
+}
+
+function answerPresent(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value !== undefined && value !== null;
+}
+
+function validateAnswers(
+  questions: Array<{ id: string; kind: string; options: unknown }>,
+  answers: Record<string, unknown>,
+): void {
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  for (const [questionId, answer] of Object.entries(answers)) {
+    const question = byId.get(questionId);
+    if (!question || !validAnswer(question, answer)) {
+      throw new BusinessRuleError('Survey contains an invalid answer');
+    }
+  }
+}
+
+function validAnswer(question: { kind: string; options: unknown }, answer: unknown): boolean {
+  if (!answerPresent(answer)) return true;
+  if (question.kind === 'rating') {
+    return typeof answer === 'number' && Number.isInteger(answer) && answer >= 1 && answer <= 5;
+  }
+  if (question.kind === 'boolean') return answer === 'yes' || answer === 'no';
+  if (question.kind === 'text' || question.kind === 'longText') return typeof answer === 'string';
+
+  const values = new Set(
+    Array.isArray(question.options)
+      ? question.options.flatMap((option) => {
+          if (!option || typeof option !== 'object' || Array.isArray(option)) return [];
+          const value = (option as Record<string, unknown>).value;
+          return typeof value === 'string' ? [value] : [];
+        })
+      : [],
+  );
+  if (question.kind === 'single') return typeof answer === 'string' && values.has(answer);
+  if (question.kind === 'multi') {
+    return (
+      Array.isArray(answer) &&
+      answer.every((value) => typeof value === 'string' && values.has(value))
+    );
+  }
+  return false;
 }

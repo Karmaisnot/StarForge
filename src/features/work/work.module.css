@@ -12,6 +12,9 @@
     radial-gradient(circle at 85% 20%, var(--sf-primary), transparent 42%);
   box-shadow: 0 18px 46px rgba(31, 24, 18, 0.14);
 }
+.motivationalHero {
+  margin-bottom: 16px;
+}
 .hero::before {
   position: absolute;
   inset: 0;
@@ -62,16 +65,16 @@
 }
 .nextEvent > time {
   padding: 8px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--sf-hero-border);
   border-radius: 9px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--sf-primary-ink);
+  background: var(--sf-primary-soft);
   font-size: 11px;
 }
 .nextEvent > span {
   width: 26px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--sf-border-strong);
 }
 .nextEvent strong,
 .nextEvent small {
@@ -82,7 +85,7 @@
 }
 .nextEvent small {
   margin-top: 4px;
-  color: rgba(255, 250, 240, 0.58);
+  color: var(--sf-muted);
   font-size: 9px;
 }
 .heroOrbit {
@@ -158,6 +161,23 @@
   border: 1px solid var(--sf-border);
   border-radius: 15px;
   background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.metric:hover {
+  transform: translateY(-2px);
+  border-color: var(--metric-color);
+  box-shadow: var(--sf-shadow-md);
+}
+.metric > svg {
+  margin-left: auto;
+  color: var(--metric-color);
 }
 .metric > span {
   display: grid;
@@ -246,6 +266,9 @@
   background: var(--sf-surface);
   box-shadow: 0 12px 36px rgba(31, 24, 18, 0.045);
 }
+.calendarPanel {
+  position: relative;
+}
 .panelHead,
 .sectionHead {
   display: flex;
@@ -297,7 +320,12 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(132px, 1fr));
   min-width: 924px;
+}
+.calendarViewport {
   overflow-x: auto;
+}
+.calendarScrollCue {
+  display: none;
 }
 .day {
   min-height: 430px;
@@ -475,9 +503,10 @@
 }
 .processCard {
   padding: 24px;
+  border: 1px solid var(--sf-hero-border);
   border-radius: 18px;
-  color: #fffaf0;
-  background: var(--sf-ink);
+  color: var(--sf-hero-ink);
+  background: var(--sf-hero-bg);
 }
 .processCard h2 {
   margin: 18px 0 8px;
@@ -487,7 +516,7 @@
 }
 .processCard > p {
   margin: 0 0 24px;
-  color: rgba(255, 250, 240, 0.58);
+  color: var(--sf-muted);
   font-size: 9px;
   line-height: 1.6;
 }
@@ -495,7 +524,7 @@
   display: flex;
   gap: 11px;
   padding: 13px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.11);
+  border-top: 1px solid var(--sf-hero-border);
 }
 .processStep > span {
   display: grid;
@@ -504,7 +533,7 @@
   place-items: center;
   border-radius: 9px;
   color: var(--sf-accent);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--sf-accent-soft);
   font-size: 8px;
 }
 .processStep strong,
@@ -516,7 +545,7 @@
 }
 .processStep small {
   margin-top: 3px;
-  color: rgba(255, 250, 240, 0.48);
+  color: var(--sf-muted);
   font-size: 8px;
   line-height: 1.4;
 }
@@ -836,13 +865,31 @@
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .calendarPanel {
-    overflow-x: auto;
+  .calendarViewport {
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-color: var(--sf-border-strong) transparent;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
   }
-  .panelHead {
-    position: sticky;
-    left: 0;
-    min-width: calc(100vw - 28px);
+  .day {
+    scroll-snap-align: start;
+  }
+  .calendarScrollCue {
+    position: absolute;
+    top: 96px;
+    right: 10px;
+    z-index: 2;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 1px solid var(--sf-border);
+    border-radius: 50%;
+    color: var(--sf-primary);
+    background: color-mix(in srgb, var(--sf-surface) 88%, transparent);
+    box-shadow: 0 4px 14px rgba(31, 24, 18, 0.12);
+    pointer-events: none;
   }
   .processCard {
     display: block;
@@ -888,11 +935,11 @@
     padding: 13px;
   }
   .weekGrid {
-    grid-template-columns: repeat(7, 150px);
-    min-width: 1050px;
+    grid-template-columns: repeat(7, 128px);
+    min-width: 896px;
   }
   .day {
-    min-height: 400px;
+    min-height: 300px;
   }
   .requestList,
   .meetingList {

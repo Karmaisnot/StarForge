@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { CohortService } from './cohort.service';
-import { CreateCohortSchema, TakeAttendanceSchema } from './cohort.schemas';
+import {
+  CohortWorkspaceQuerySchema,
+  CreateCohortSchema,
+  TakeAttendanceSchema,
+} from './cohort.schemas';
 
 /** Cohort read + write routes. All require authentication. */
 export function cohortRoutes(service: CohortService) {
@@ -30,6 +34,16 @@ export function cohortRoutes(service: CohortService) {
     app.get('/cohorts/:cohortId/roster', auth, (req) => {
       const { cohortId } = req.params as { cohortId: string };
       return service.getRoster(req.auth, cohortId);
+    });
+
+    app.get('/cohorts/:cohortId/workspace', auth, (req) => {
+      const { cohortId } = req.params as { cohortId: string };
+      return service.getWorkspace(req.auth, cohortId, CohortWorkspaceQuerySchema.parse(req.query));
+    });
+
+    app.post('/cohorts/:cohortId/advance', auth, (req) => {
+      const { cohortId } = req.params as { cohortId: string };
+      return service.advance(req.auth, cohortId);
     });
   };
 }

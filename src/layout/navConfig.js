@@ -50,7 +50,13 @@ export const PRIMARY_NAV = [
 ];
 
 export const SECONDARY_NAV = [
-  { id: 'operations', path: '/operations', label: 'Operatsiyalar', icon: 'globe', roles: ALL_STAFF },
+  {
+    id: 'operations',
+    path: '/operations',
+    label: 'Operatsiyalar',
+    icon: 'globe',
+    roles: ALL_STAFF,
+  },
   { id: 'people', path: '/people', label: 'Odamlar', icon: 'users', roles: ALL_STAFF },
   { id: 'cohorts', path: '/cohorts', label: 'Guruhlar', icon: 'cohort', roles: LEARNING_STAFF },
   {
@@ -62,13 +68,6 @@ export const SECONDARY_NAV = [
     roles: ['teacher', 'registrar'],
   },
   {
-    id: 'cards',
-    path: '/cards',
-    label: 'Kartalar',
-    icon: 'brand',
-    roles: ['teacher', 'registrar', 'security'],
-  },
-  {
     id: 'surveys',
     path: '/surveys',
     label: "So'rovnomalar",
@@ -78,27 +77,11 @@ export const SECONDARY_NAV = [
     roles: ['teacher', 'registrar'],
   },
   {
-    id: 'mgmt',
-    path: '/mgmt',
-    label: 'Boshqaruv',
-    icon: 'shield',
-    badge: 'mgmt',
-    roles: ALL_STAFF,
-  },
-  {
     id: 'materials',
     path: '/materials',
     label: 'Materiallar',
     icon: 'folder',
     roles: ['teacher', 'librarian'],
-  },
-  {
-    id: 'notifications',
-    path: '/notifications',
-    label: 'Bildirishnomalar',
-    icon: 'bell',
-    badge: 'notif',
-    roles: ALL_STAFF,
   },
 ];
 

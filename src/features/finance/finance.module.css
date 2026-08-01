@@ -525,6 +525,57 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+@media (max-width: 900px) {
+  .invoicePanel {
+    overflow: hidden;
+  }
+  .invoicePanel .panelHead {
+    min-width: 0;
+  }
+  .invoiceTable {
+    min-width: 0;
+  }
+  .tableHeader {
+    display: none;
+  }
+  .invoiceRow {
+    grid-template-areas:
+      'invoice status'
+      'student balance'
+      'due balance';
+    grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+    gap: 5px 12px;
+    min-height: 0;
+    padding: 13px 16px;
+  }
+  .invoiceRow > :nth-child(1) {
+    grid-area: invoice;
+  }
+  .invoiceRow > :nth-child(2) {
+    grid-area: student;
+    font-size: 10px;
+  }
+  .invoiceRow > :nth-child(3) {
+    grid-area: due;
+  }
+  .invoiceRow > :nth-child(4) {
+    grid-area: balance;
+    align-self: center;
+  }
+  .invoiceRow > :nth-child(5) {
+    grid-area: status;
+    justify-self: end;
+  }
+  .due::before,
+  .balance::before {
+    content: attr(data-label) ' · ';
+    color: var(--sf-muted);
+    font-family: var(--sf-font-mono);
+    font-size: 7px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}
 @media (max-width: 760px) {
   .hero {
     grid-template-columns: 1fr auto;
@@ -534,12 +585,6 @@
   }
   .metrics {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .invoicePanel {
-    overflow-x: auto;
-  }
-  .invoicePanel .panelHead {
-    min-width: 700px;
   }
   .sideColumn {
     grid-template-columns: 1fr;
@@ -568,8 +613,12 @@
   .panelHead {
     align-items: flex-start;
   }
+  .invoicePanel .panelHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .search {
-    width: 190px;
+    width: 100%;
   }
   .expenseGrid {
     grid-template-columns: 1fr;

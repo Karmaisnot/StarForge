@@ -1,15 +1,9 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Palette } from '@/domain/enums.js';
+import { ThemeContext } from './contexts.js';
 
 const STORAGE_KEY = 'sf-theme';
 const DEFAULT = { palette: Palette.SAROY, dark: false };
-
-export const ThemeContext = createContext({
-  ...DEFAULT,
-  setPalette: () => {},
-  toggleDark: () => {},
-  setDark: () => {},
-});
 
 function readStored() {
   try {
