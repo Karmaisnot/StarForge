@@ -4,7 +4,9 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useServices } from '@/hooks/useServices.js';
 import { useTeacher } from '@/hooks/data.js';
 import { useT } from '@/hooks/useT.js';
-import { ALL_NAV } from './navConfig.js';
+import { accessForPath, navItemForPath, profileCanOpen } from './navConfig.js';
+import { canAccess, isStaffProfile } from '@/domain/access.js';
+import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 import { Sidebar } from './Sidebar.jsx';
 import { TopBar } from './TopBar.jsx';
 import { MobileTabs } from './MobileTabs.jsx';
@@ -66,10 +68,10 @@ export function AppShell() {
   const { data: aiUsage } = useQuery({
     queryKey: ['ai', 'usage', teacher?.id],
     queryFn: () => ai.getUsage(),
-    enabled: teacher?.roleKey === 'teacher',
+    enabled: DATA_SOURCE === 'remote' ? canAccess(teacher, 'ai_app') : teacher?.roleKey === 'teacher',
   });
 
-  const current = ALL_NAV.find((n) => pathname.startsWith(n.path));
+  const current = navItemForPath(pathname);
   const title = current ? t(`nav.${current.id}`) : 'StarForge';
 
   // Fail closed while the authenticated identity is unknown. Otherwise a
@@ -82,11 +84,11 @@ export function AppShell() {
     );
   }
 
-  if (['director', 'head_of_dept'].includes(teacher?.roleKey)) {
+  if (!isStaffProfile(teacher)) {
     return <StaffOnlyPage profile={teacher} />;
   }
 
-  if (current?.roles && !current.roles.includes(teacher.roleKey)) {
+  if (!profileCanOpen(accessForPath(pathname), teacher)) {
     return <RouteAccessPage profile={teacher} />;
   }
 

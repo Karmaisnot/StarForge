@@ -9,6 +9,10 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 
 COPY . .
+# The image defaults to the production tenant API. docker-compose passes
+# `local` only for the bundled compatibility stack.
+ARG VITE_DATA_SOURCE=remote
+ENV VITE_DATA_SOURCE=$VITE_DATA_SOURCE
 RUN npm run build
 
 # ── Stage 2: serve with nginx ─────────────────────────────────────

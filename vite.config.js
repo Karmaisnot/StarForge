@@ -6,10 +6,10 @@ import { visualizer } from 'rollup-plugin-visualizer';
 // Path alias `@` -> `src` keeps imports flat across the layered architecture.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  // The project ships its own API. Keep browser calls same-origin and proxy
-  // them locally in development; a deployment can override this target without
-  // changing frontend code.
-  const apiTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:4000';
+  // Proxy only when a development API target is deliberately configured. The
+  // production app calls its tenant origin directly; silently falling back to
+  // the old bundled server would mask a deployment configuration mistake.
+  const apiTarget = env.VITE_API_PROXY_TARGET;
 
   return {
     plugins: [
@@ -25,12 +25,14 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       open: false,
-      proxy: {
-        '/api': {
-          target: apiTarget,
-          changeOrigin: true,
-        },
-      },
+      proxy: apiTarget
+        ? {
+            '/api': {
+              target: apiTarget,
+              changeOrigin: true,
+            },
+          }
+        : undefined,
     },
   };
 });

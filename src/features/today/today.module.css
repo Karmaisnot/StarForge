@@ -554,7 +554,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   gap: 14px;
+  align-items: stretch;
 }
+.widePanel { grid-column: 1 / -1; }
 .dashboardPanel {
   min-width: 0;
   padding: 18px;
@@ -582,8 +584,9 @@
 .lineChart {
   position: relative;
   min-height: 230px;
+  touch-action: pan-y;
 }
-.lineChart svg {
+.lineChart > svg {
   display: block;
   width: 100%;
   height: 230px;
@@ -605,6 +608,7 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.trendArea { pointer-events: none; }
 .lineChart circle {
   fill: var(--sf-surface);
   stroke: var(--sf-primary);
@@ -888,6 +892,7 @@
   align-items: start;
   gap: 16px;
 }
+.contextOnly { grid-template-columns: minmax(0, 1fr); }
 .primaryFlow,
 .contextFlow {
   display: flex;
@@ -1633,7 +1638,7 @@
     padding: 15px;
   }
   .lineChart,
-  .lineChart svg,
+  .lineChart > svg,
   .loadChart {
     min-height: 200px;
     height: 200px;

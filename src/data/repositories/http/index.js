@@ -5,6 +5,7 @@ import { getLocale } from '@/i18n/locale.js';
 import { ApiError } from '@/data/http/apiError.js';
 import { httpClient } from '@/data/http/httpClient.js';
 import { createStudentWorkbookPayload } from '@/data/spreadsheet.js';
+import { canAccess, profilePermissions } from '@/domain/access.js';
 import {
   IAccountRepository,
   ICohortRepository,
@@ -212,18 +213,7 @@ async function optional(load, fallback) {
   }
 }
 
-function splitFullName(name) {
-  const parts = String(name ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  return {
-    first_name: parts.shift() ?? '',
-    last_name: parts.join(' '),
-  };
-}
-
-function mapTeacher(user) {
+function mapLegacyTeacher(user) {
   const membership = user?.role_memberships?.[0] ?? {};
   // The tenant API calls this `account_type_name` (for example, "Director"),
   // while older mock payloads used `role`. Accept both so staff never appears
@@ -249,8 +239,40 @@ function mapTeacher(user) {
 
 function hasTeacherMembership(user) {
   return asList(user?.role_memberships).some(
-    (membership) => membership?.account_kind === 'teacher',
+    (membership) => membership?.account_kind === 'teacher' || membership?.role === 'teacher',
   );
+}
+
+function mapTeacher(user) {
+  const memberships = asList(user?.role_memberships);
+  if (!memberships.length && (user?.account_type_name || user?.account_type_slug)) {
+    return mapLegacyTeacher(user);
+  }
+  const membership = memberships[0] ?? {};
+  const roles = memberships
+    .map((item) => item?.role ?? item?.account_type_slug ?? item?.account_type_name)
+    .filter(Boolean)
+    .map((role) => String(role).trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  const roleKey = roles[0] ?? membership.account_kind ?? 'staff';
+  const rawRole = membership.account_type_name ?? membership.role ?? membership.account_type_slug ?? roleKey;
+  const profile = {
+    id: user?.id,
+    name: displayName(user),
+    username: user?.username ?? user?.email ?? user?.phone ?? '',
+    usernameEditable: false,
+    role: rawRole ? String(rawRole).replaceAll('_', ' ') : copy().teacher,
+    roleKey,
+    roles,
+    roleMemberships: memberships,
+    accountKind:
+      membership.account_kind ?? (roles.includes('teacher') ? 'teacher' : roles.length ? 'staff' : 'unknown'),
+    branchId: membership.branch ?? null,
+    branch: membership.branch ? `${copy().branch} #${membership.branch}` : '—',
+    preferredLanguage: user?.preferred_language ?? null,
+    subjects: [],
+    permissionCodes: asList(user?.permissions ?? user?.permission_codes),
+  };
+  return { ...profile, permissionCodes: profilePermissions(profile) };
 }
 
 function mapDevice(device) {
@@ -604,9 +626,13 @@ export class HttpAccountRepository extends IAccountRepository {
   }
 
   async updateTeacher(patch) {
-    const body = patch?.name ? splitFullName(patch.name) : {};
-    if (Object.keys(body).length === 0) return this.getTeacher();
-    return mapTeacher(await httpClient.patch('users/me/', body));
+    if (patch && Object.keys(patch).length) {
+      throw clientContractError(
+        'users/me/',
+        'The current tenant API exposes the staff profile as read-only. Ask an authorized registrar to update identity details.',
+      );
+    }
+    return this.getTeacher();
   }
 
   async getSettings() {
@@ -616,9 +642,6 @@ export class HttpAccountRepository extends IAccountRepository {
 
   async patchSettings(patch) {
     const next = { ...this.#settings, ...patch };
-    if (patch?.locale) {
-      await httpClient.patch('users/me/', { preferred_language: patch.locale });
-    }
     this.#settings = next;
     return { ...next };
   }
@@ -936,7 +959,7 @@ export class HttpTaskRepository extends ITaskRepository {
   }
 }
 
-export class HttpDashboardRepository extends IDashboardRepository {
+export class LegacyHttpDashboardRepository extends IDashboardRepository {
   async getToday() {
     const [me, rawTasks, rawMeetings, rawRequests, rawUnread] = await Promise.all([
       optional(() => httpClient.get('users/me/'), null),
@@ -1103,6 +1126,190 @@ export class HttpDashboardRepository extends IDashboardRepository {
         stats: [],
       },
       activity: [],
+    };
+  }
+}
+
+const LIVE_DASHBOARD_SOURCES = [
+  { id: 'students', endpoint: 'students/?page_size=100', permission: 'students', label: 'Students', path: '/students' },
+  { id: 'staff', endpoint: 'users/?page_size=100', permission: 'users', label: 'Staff', path: '/staff' },
+  { id: 'teachers', endpoint: 'teachers/?page_size=100', permission: 'teachers', label: 'Teachers', path: '/teachers' },
+  { id: 'parents', endpoint: 'parents/?page_size=100', permission: 'parents', label: 'Parents', path: '/parents' },
+  { id: 'cohorts', endpoint: 'cohorts/?page_size=100', permission: 'cohorts', label: 'Groups', path: '/cohorts' },
+  { id: 'schedule', endpoint: 'schedule/?page_size=100', permission: 'schedule', label: 'Schedule', path: '/schedule' },
+  { id: 'attendance', endpoint: 'attendance/?page_size=100', permission: 'attendance', label: 'Attendance', path: '/attendance' },
+  { id: 'academics', endpoint: 'academics/?page_size=100', permission: 'academics', label: 'Academics', path: '/academics' },
+  { id: 'assignments', endpoint: 'assignments/?page_size=100', permission: 'assignments', label: 'Assignments', path: '/assignments' },
+  { id: 'content', endpoint: 'content/?page_size=100', permission: 'content', label: 'Content', path: '/content' },
+  { id: 'finance', endpoint: 'finance/?page_size=100', permission: 'finance', label: 'Finance', path: '/finance' },
+  { id: 'payments', endpoint: 'payments/?page_size=100', permission: 'payments', label: 'Payments', path: '/payments' },
+  { id: 'printing', endpoint: 'printing/?page_size=100', permission: 'printing', label: 'Printing', path: '/printing' },
+  { id: 'notifications', endpoint: 'notifications/?page_size=100', permission: 'notifications', label: 'Notifications', path: '/notifications' },
+  { id: 'ai', endpoint: 'ai/?page_size=100', permission: 'ai_app', label: 'AI requests', path: '/ai' },
+  { id: 'reports', endpoint: 'reports/?page_size=100', permission: 'reports', label: 'Reports', path: '/reports' },
+  { id: 'audit', endpoint: 'audit/?page_size=100', permission: 'audit', label: 'Audit entries', path: '/audit' },
+];
+
+function liveRecordName(row, source) {
+  return row?.name || row?.title || row?.full_name || row?.email || `${source.label} #${row?.id ?? '—'}`;
+}
+
+function recordTimestamp(row) {
+  const value = row?.updated_at ?? row?.created_at ?? row?.starts_at ?? row?.date ?? null;
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function activityTrend(rows, range) {
+  const dated = rows.map(recordTimestamp).filter(Boolean);
+  if (!dated.length) return [];
+  const days = range === 'term' ? 84 : range === '30d' ? 30 : 7;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today);
+  start.setDate(start.getDate() - (days - 1));
+  const buckets = Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return { date, value: 0 };
+  });
+  for (const date of dated) {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const index = Math.round((day - start) / 86400000);
+    if (index >= 0 && index < buckets.length) buckets[index].value += 1;
+  }
+  return buckets.map((bucket) => ({
+    label: new Intl.DateTimeFormat(localeTag(), {
+      day: 'numeric',
+      month: days > 7 ? 'short' : undefined,
+      weekday: days <= 7 ? 'short' : undefined,
+    }).format(bucket.date),
+    value: bucket.value,
+    date: bucket.date.toISOString(),
+  }));
+}
+
+/** Live dashboard assembled only from the backend resources this role can read. */
+export class HttpDashboardRepository extends IDashboardRepository {
+  async getToday(range = '7d') {
+    const rawProfile = await httpClient.get('users/me/');
+    const profile = mapTeacher(rawProfile);
+    const sources = LIVE_DASHBOARD_SOURCES.filter((source) => canAccess(profile, source.permission));
+    const loaded = await Promise.all(
+      sources.map(async (source) => ({
+        ...source,
+        rows: asList(await optional(() => httpClient.get(source.endpoint), [])),
+      })),
+    );
+    const allRows = loaded.flatMap((source) => source.rows.map((row) => ({ row, source })));
+    const total = loaded.reduce((sum, source) => sum + source.rows.length, 0);
+    const teaching = profile.roles.includes('teacher');
+    const populated = loaded.filter((source) => source.rows.length);
+    const overview = (populated.length ? populated : loaded).slice(0, 4);
+    const schedule = loaded.find((source) => source.id === 'schedule')?.rows ?? [];
+    const upcoming = schedule
+      .map((row) => ({ row, startsAt: row?.starts_at ? new Date(row.starts_at) : null }))
+      .filter((item) => item.startsAt && !Number.isNaN(item.startsAt.getTime()) && item.startsAt.getTime() >= Date.now())
+      .sort((a, b) => a.startsAt - b.startsAt)[0]?.row;
+    const cohortRows = loaded.find((source) => source.id === 'cohorts')?.rows ?? [];
+    const trend = activityTrend(allRows.map((item) => item.row), range);
+    const distribution = loaded
+      .filter((source) => source.rows.length)
+      .slice(0, 8)
+      .map((source) => ({ label: source.label, value: source.rows.length, path: source.path }));
+    const breakdown = loaded
+      .filter((source) => source.rows.length)
+      .slice(0, 6)
+      .map((source) => ({
+        label: source.label,
+        value: Math.round((source.rows.filter((row) => row?.is_active !== false).length / source.rows.length) * 100),
+        target: 100,
+        path: source.path,
+      }));
+
+    return {
+      meta: {
+        dateLabel: formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+        greetingName: profile.name.split(' ')[0] || '',
+        summary: `${total} live records across ${loaded.length} workspace${loaded.length === 1 ? '' : 's'}`,
+      },
+      surveyBanner: null,
+      stats: overview.map((source) => ({
+        value: String(source.rows.length),
+        label: source.label,
+        color: source.id === 'finance' ? 'var(--sf-success)' : 'var(--sf-primary)',
+        path: source.path,
+      })),
+      workspaceMode: teaching ? 'teaching' : 'staff',
+      analytics: {
+        trendTitle: 'Activity trend',
+        trendSubtitle: `New and updated API records over ${range === 'term' ? 'the term' : range.replace('d', ' days')}`,
+        trendUnit: 'records',
+        distributionTitle: 'Records by workspace',
+        distributionSubtitle: 'Only authorized sources are included',
+        breakdownTitle: 'Active record health',
+        breakdownSubtitle: 'Share of active records in each workspace',
+        groupTitle: 'Group availability',
+        groupSubtitle: 'Live group records in your scope',
+      },
+      performance: {
+        rank: { position: 0, total: 0, score: 0, change: 0, percentile: '', nextGap: 0 },
+        attendanceTrend: trend,
+        weeklyLoad: distribution,
+        scoreBreakdown: breakdown,
+        groupHealth: cohortRows.slice(0, 6).map((group) => ({
+          id: String(group.id),
+          name: liveRecordName(group, { label: 'Group' }),
+          attendance: toNumber(group.attendance ?? group.rate),
+          up: 0,
+          down: 0,
+        })),
+        updatedAt: allRows.length
+          ? formatTime(
+              allRows
+                .map((item) => recordTimestamp(item.row))
+                .filter(Boolean)
+                .sort((a, b) => b - a)[0],
+            )
+          : '',
+      },
+      heroLesson: upcoming
+        ? {
+            available: true,
+            kind: 'lesson',
+            eyebrow: 'Next scheduled item',
+            title: liveRecordName(upcoming, { label: 'Schedule' }),
+            titleAccent: '',
+            sub: upcoming.notes || '',
+            start: formatTime(upcoming.starts_at),
+            end: upcoming.ends_at ? `– ${formatTime(upcoming.ends_at)}` : '',
+          }
+        : { available: false, kind: teaching ? 'lesson' : 'staff', title: '', titleAccent: '', sub: '', start: '—', end: '' },
+      schedule: schedule.slice(0, 6).map((lesson) => ({
+        time: formatTime(lesson.starts_at ?? lesson.created_at),
+        label: liveRecordName(lesson, { label: 'Schedule' }),
+        room: lesson.notes || '',
+        state: 'planned',
+      })),
+      recentCards: [],
+      pendingTasks: [],
+      aiInsight: null,
+      printQueue: [],
+      mgmtMention: { name: '', role: '', message: '', time: '' },
+      spotlight: cohortRows[0]
+        ? { name: liveRecordName(cohortRows[0], { label: 'Group' }), sub: 'Live group record', tone: 'neutral', toneLabel: '', stats: [] }
+        : null,
+      activity: allRows
+        .sort((a, b) => (recordTimestamp(b.row)?.getTime() ?? 0) - (recordTimestamp(a.row)?.getTime() ?? 0))
+        .slice(0, 6)
+        .map(({ row, source }) => ({
+          icon: source.id === 'finance' || source.id === 'payments' ? 'pie' : 'doc',
+          color: 'var(--sf-primary)',
+          title: liveRecordName(row, source),
+          body: source.label,
+          time: formatTime(recordTimestamp(row)),
+        })),
     };
   }
 }
@@ -2072,18 +2279,9 @@ export class HttpOperationsRepository extends IOperationsRepository {
 /** Navigation badge counts, assembled from the endpoint-specific live sources. */
 export class HttpNavigationRepository {
   async getBadges() {
-    const [unread, tasks, forms, threads] = await Promise.all([
-      httpClient.get('notifications/unread-count/'),
-      optional(() => httpClient.get('tasks/mine/?page_size=100'), []),
-      optional(() => httpClient.get('forms/?status=published&page_size=100'), []),
-      optional(() => httpClient.get('messaging/threads/?page_size=100'), []),
-    ]);
-    return {
-      notif: toNumber(unread?.count),
-      tasks: asList(tasks).filter((task) => task.status !== 'done' && task.status !== 'cancelled')
-        .length,
-      surveys: asList(forms).length,
-      mgmt: asList(threads).reduce((sum, thread) => sum + toNumber(thread.unread_count), 0),
-    };
+    // The Django API exposes notifications as a generic resource, not an
+    // unread-count feed. Avoid speculative calls; capability pages display
+    // their live collection count once the user opens them.
+    return {};
   }
 }

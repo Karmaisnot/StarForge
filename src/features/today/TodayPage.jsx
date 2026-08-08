@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
@@ -32,6 +32,21 @@ export function TodayPage() {
       {(data) => {
         const performance = normalizePerformance(data.performance);
         const staffMode = data.workspaceMode === 'staff';
+        const analytics = data.analytics ?? {};
+        const hasAnalytics =
+          performance.attendanceTrend.length > 1 ||
+          performance.weeklyLoad.length > 0 ||
+          performance.scoreBreakdown.length > 0 ||
+          performance.groupHealth.length > 0;
+        const hasSchedule = !staffMode && data.schedule?.length > 0 && show('schedule');
+        const hasTasks = data.pendingTasks?.length > 0 && show('pendingTasks');
+        const hasContext =
+          (!staffMode && Boolean(data.aiInsight)) ||
+          (show('activity') && data.activity?.length > 0) ||
+          Boolean(data.mgmtMention?.message) ||
+          (!staffMode && show('spotlight') && Boolean(data.spotlight)) ||
+          (show('printQueue') && data.printQueue?.length > 0);
+        const hasOperations = hasSchedule || hasTasks || hasContext;
 
         return (
           <>
@@ -65,8 +80,7 @@ export function TodayPage() {
                     : undefined
                 }
                 action={
-                  !staffMode && (
-                    <div className={styles.rangeControl} aria-label={t('today.attendanceTrend')}>
+                  <div className={styles.rangeControl} aria-label={analytics.trendTitle ?? t('today.attendanceTrend')}>
                       {['7d', '30d', 'term'].map((value) => (
                         <button
                           key={value}
@@ -78,7 +92,7 @@ export function TodayPage() {
                         </button>
                       ))}
                     </div>
-                  )
+
                 }
               />
 
@@ -91,69 +105,72 @@ export function TodayPage() {
                     index={index}
                     onOpen={() =>
                       navigate(
-                        ['/work', '/cohorts', '/cohorts', '/surveys', '/tasks'][index] ?? '/today',
+                        metric.path ?? ['/work', '/cohorts', '/cohorts', '/surveys', '/tasks'][index] ?? '/today',
                       )
                     }
                   />
                 ))}
               </div>
 
-              {!staffMode && (
+              {hasAnalytics && (
                 <div className={styles.analyticsGrid}>
                   <DashboardPanel
                     className={styles.trendPanel}
-                    title={t('today.attendanceTrend')}
-                    subtitle={t('today.attendanceTrendSub')}
+                    title={analytics.trendTitle ?? t('today.attendanceTrend')}
+                    subtitle={analytics.trendSubtitle ?? t('today.attendanceTrendSub')}
                   >
                     <AttendanceChart
                       points={performance.attendanceTrend}
+                      unit={analytics.trendUnit ?? '%'}
                       emptyLabel={t('today.noPerformanceData')}
                       onSelect={(point) =>
-                        navigate(`/academic?tab=insights&date=${encodeURIComponent(point.label)}`)
+                        navigate(point.path ?? `/academic?tab=insights&date=${encodeURIComponent(point.label)}`)
                       }
                     />
                   </DashboardPanel>
 
                   <DashboardPanel
-                    title={t('today.teachingLoad')}
-                    subtitle={t('today.teachingLoadSub')}
+                    title={analytics.distributionTitle ?? t('today.teachingLoad')}
+                    subtitle={analytics.distributionSubtitle ?? t('today.teachingLoadSub')}
                   >
                     <TeachingLoadChart
                       points={performance.weeklyLoad}
-                      unit={t('today.lessonsShort')}
+                      unit={analytics.trendUnit ?? t('today.lessonsShort')}
                       emptyLabel={t('today.noPerformanceData')}
-                      onSelect={(point) => navigate(`/work?day=${encodeURIComponent(point.label)}`)}
+                      onSelect={(point) => navigate(point.path ?? `/work?day=${encodeURIComponent(point.label)}`)}
                     />
                   </DashboardPanel>
 
                   <DashboardPanel
-                    title={t('today.scoreBreakdown')}
-                    subtitle={t('today.scoreBreakdownSub')}
+                    className={!performance.groupHealth.length ? styles.widePanel : ''}
+                    title={analytics.breakdownTitle ?? t('today.scoreBreakdown')}
+                    subtitle={analytics.breakdownSubtitle ?? t('today.scoreBreakdownSub')}
                   >
                     <ScoreBreakdown
                       rows={performance.scoreBreakdown}
                       targetLabel={t('today.target')}
                       emptyLabel={t('today.noPerformanceData')}
-                      onSelect={(row) =>
-                        navigate(`/academic?tab=insights&metric=${encodeURIComponent(row.label)}`)
-                      }
+                      onSelect={(row) => navigate(row.path ?? `/academic?tab=insights&metric=${encodeURIComponent(row.label)}`)}
                     />
                   </DashboardPanel>
 
-                  <DashboardPanel
-                    title={t('today.groupHealth')}
-                    subtitle={t('today.groupHealthSub')}
-                  >
-                    <GroupHealth
-                      groups={performance.groupHealth}
-                      t={t}
-                      onOpen={(group) => navigate(group.id ? `/cohorts/${group.id}` : '/cohorts')}
-                    />
-                  </DashboardPanel>
+                  {performance.groupHealth.length > 0 && (
+                    <DashboardPanel
+                      title={analytics.groupTitle ?? t('today.groupHealth')}
+                      subtitle={analytics.groupSubtitle ?? t('today.groupHealthSub')}
+                    >
+                      <GroupHealth
+                        groups={performance.groupHealth}
+                        t={t}
+                        onOpen={(group) => navigate(group.id ? `/cohorts/${group.id}` : '/cohorts')}
+                      />
+                    </DashboardPanel>
+                  )}
                 </div>
               )}
             </section>
 
+            {hasOperations && (
             <section className={styles.operationsSection} aria-labelledby="operations-heading">
               <SectionHeading
                 id="operations-heading"
@@ -161,12 +178,12 @@ export function TodayPage() {
                 title={t('today.todayOperations')}
               />
 
-              <div className={styles.operationsGrid}>
-                <div className={styles.primaryFlow}>
-                  {!staffMode && show('schedule') && (
+              <div className={`${styles.operationsGrid} ${!(hasSchedule || hasTasks) ? styles.contextOnly : ''}`}>
+                {(hasSchedule || hasTasks) && <div className={styles.primaryFlow}>
+                  {hasSchedule && (
                     <ScheduleCard rows={data.schedule} t={t} onOpen={() => navigate('/cohorts')} />
                   )}
-                  {show('pendingTasks') && (
+                  {hasTasks && (
                     <TasksCard
                       tasks={data.pendingTasks}
                       doneTasks={doneTasks}
@@ -175,9 +192,9 @@ export function TodayPage() {
                       onOpen={() => navigate('/tasks')}
                     />
                   )}
-                </div>
+                </div>}
 
-                <aside className={styles.contextFlow}>
+                {hasContext && <aside className={styles.contextFlow}>
                   {!staffMode && data.aiInsight && (
                     <AiInsight insight={data.aiInsight} t={t} onOpen={() => navigate('/ai')} />
                   )}
@@ -204,11 +221,12 @@ export function TodayPage() {
                   {show('printQueue') && data.printQueue?.length > 0 && (
                     <PrintQueue jobs={data.printQueue} t={t} onOpen={() => navigate('/print')} />
                   )}
-                </aside>
+                </aside>}
               </div>
             </section>
+            )}
 
-            {!staffMode && (
+            {!staffMode && data.aiInsight && (
               <AiActionCenter
                 data={data}
                 performance={performance}
@@ -441,8 +459,9 @@ function DashboardPanel({ title, subtitle, className = '', children }) {
   );
 }
 
-function AttendanceChart({ points, emptyLabel, onSelect }) {
+function AttendanceChart({ points, unit = '%', emptyLabel, onSelect }) {
   const [active, setActive] = useState(Math.max(0, points.length - 1));
+  const gradientId = useId().replaceAll(':', '');
   if (points.length < 2) return <div className={styles.emptyPerformance}>{emptyLabel}</div>;
 
   const width = 680;
@@ -451,8 +470,13 @@ function AttendanceChart({ points, emptyLabel, onSelect }) {
   const right = 16;
   const top = 18;
   const bottom = 36;
-  const min = 80;
-  const max = 100;
+  const values = points.map((point) => Number(point.value) || 0);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const span = Math.max(1, rawMax - rawMin);
+  const padding = rawMax === rawMin ? Math.max(1, Math.abs(rawMax) * 0.12) : span * 0.14;
+  const min = Math.max(0, rawMin - padding);
+  const max = rawMax + padding;
   const xStep = (width - left - right) / (points.length - 1);
   const y = (value) =>
     top + ((max - clamp(value, min, max)) / (max - min)) * (height - top - bottom);
@@ -460,23 +484,47 @@ function AttendanceChart({ points, emptyLabel, onSelect }) {
   const path = coords
     .map(([x, pointY], index) => `${index === 0 ? 'M' : 'L'} ${x} ${pointY}`)
     .join(' ');
+  const baseline = height - bottom;
+  const areaPath = `${path} L ${coords.at(-1)[0]} ${baseline} L ${coords[0][0]} ${baseline} Z`;
+  const ticks = Array.from({ length: 4 }, (_, index) => min + ((max - min) * index) / 3);
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  const suffix = unit === '%' ? '%' : unit ? ` ${unit}` : '';
+  const formatValue = (value) => `${Number(value).toLocaleString()}${suffix}`;
   const latest = points.at(-1);
   const selected = points[active] ?? latest;
+  const selectNearestPoint = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const relative = ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * width;
+    const index = Math.round((relative - left) / xStep);
+    setActive(clamp(index, 0, points.length - 1));
+  };
 
   return (
     <div className={styles.lineChart}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${latest.value}%`}>
-        {[80, 90, 100].map((tick) => {
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${latest.label}: ${formatValue(latest.value)}`}
+        onPointerMove={selectNearestPoint}
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--sf-primary)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="var(--sf-primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((tick) => {
           const tickY = y(tick);
           return (
-            <g key={tick}>
+            <g key={tick.toFixed(3)}>
               <line x1={left} x2={width - right} y1={tickY} y2={tickY} />
               <text x="0" y={tickY + 4}>
-                {tick}%
+                {formatValue(Math.round(tick * 10) / 10)}
               </text>
             </g>
           );
         })}
+        <path className={styles.trendArea} d={areaPath} fill={`url(#${gradientId})`} />
         <path className={styles.trendLine} d={path} />
         {coords.map(([x, pointY], index) => (
           <g
@@ -484,12 +532,18 @@ function AttendanceChart({ points, emptyLabel, onSelect }) {
             className={styles.chartPoint}
             role="button"
             tabIndex="0"
-            aria-label={`${points[index].label}: ${points[index].value}%`}
+            aria-label={`${points[index].label}: ${formatValue(points[index].value)}`}
             onMouseEnter={() => setActive(index)}
             onFocus={() => setActive(index)}
             onClick={() => onSelect?.(points[index])}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+              if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActive(Math.min(points.length - 1, index + 1));
+              } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActive(Math.max(0, index - 1));
+              } else if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 onSelect?.(points[index]);
               }
@@ -501,7 +555,7 @@ function AttendanceChart({ points, emptyLabel, onSelect }) {
               cy={pointY}
               r={index === active ? 6 : 4}
             />
-            {(index % 2 === 0 || index === coords.length - 1) && (
+            {(index % labelEvery === 0 || index === coords.length - 1) && (
               <text className={styles.axisLabel} x={x} y={height - 10} textAnchor="middle">
                 {points[index].label}
               </text>
@@ -511,7 +565,7 @@ function AttendanceChart({ points, emptyLabel, onSelect }) {
       </svg>
       <button type="button" className={styles.chartCurrent} onClick={() => onSelect?.(selected)}>
         <span>{selected.label}</span>
-        <strong className="sf-mono">{selected.value}%</strong>
+        <strong className="sf-mono">{formatValue(selected.value)}</strong>
         <Icon name="arrowR" size={12} />
       </button>
     </div>

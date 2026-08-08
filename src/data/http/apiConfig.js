@@ -5,14 +5,12 @@
 const rawBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
 
-// `VITE_USE_MOCK` is retained as a compatibility fallback for existing setups.
-// New deployments should select an explicit source so the local Fastify API and
-// the legacy tenant API cannot be confused.
+// Production is deliberately the default. Demo data is available only through
+// an explicit VITE_DATA_SOURCE=mock opt-in and can never leak into a deployment
+// because an environment variable was omitted.
 export const DATA_SOURCE = ['mock', 'local', 'remote'].includes(rawSource)
   ? rawSource
-  : import.meta.env?.VITE_USE_MOCK === 'false'
-    ? 'remote'
-    : 'mock';
+  : 'remote';
 
 export const API_PREFIX = DATA_SOURCE === 'local' ? '/api' : '/api/v1';
 export const API_MODE = DATA_SOURCE !== 'mock';

@@ -6,6 +6,8 @@ services:
     build:
       context: .
       target: runtime
+      args:
+        VITE_DATA_SOURCE: local
     image: starforge-edu:latest
     ports:
       - '8080:80'
@@ -41,6 +43,8 @@ services:
     profiles: ['dev']
     working_dir: /app
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_DATA_SOURCE: local
     ports:
       - '5173:5173'
     depends_on:
