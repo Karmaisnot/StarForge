@@ -1,203 +1,313 @@
-// Session handling for staff accounts. Authentication is permanently based on
-// username and password. Production uses the remote role-login endpoint.
-import { getLocale } from '@/i18n/locale.js';
-import { apiUrl, isLocalApiMode } from './apiConfig.js';
+// Staff browser-session lifecycle. Production credentials live exclusively in
+// the backend's HttpOnly cookie; this module stores only identity presentation
+// state and non-secret cross-tab notifications.
+import { isApiMode } from './apiConfig.js';
 import { ApiError } from './apiError.js';
+import {
+  configureHttpSessionPolicy,
+  httpClient,
+  resetHttpSessionPolicy,
+} from './httpClient.js';
+import {
+  AUTH_SESSION_CHANGED,
+  getSessionSnapshot,
+  setSessionSnapshot,
+  subscribeToSession,
+} from './sessionState.js';
 
-const STORAGE_KEY = 'sf-session-access';
-const PASSWORD_CHANGE_STORAGE_KEY = 'sf-session-password-change-required';
-const DEVICE_KEY = 'sf-device-id';
-const AUTH_EVENT = 'sf:auth-changed';
-const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT || 'role-login';
-const LOCAL_LOGIN_PATH = 'auth/login';
-const normalizedRemoteEndpoint = AUTH_ENDPOINT?.replace(/^\/+|\/+$/g, '');
-const REMOTE_LOGIN_PATH = normalizedRemoteEndpoint
-  ? `${normalizedRemoteEndpoint.startsWith('auth/') ? normalizedRemoteEndpoint : `auth/${normalizedRemoteEndpoint}`}/`
-  : null;
+export { AUTH_SESSION_CHANGED, getSessionSnapshot, subscribeToSession };
 
-let token = readStorage(STORAGE_KEY);
-let passwordChangeRequired = readStorage(PASSWORD_CHANGE_STORAGE_KEY) === 'true';
+const DEVICE_KEY = 'sf-staff-device';
+const SESSION_SIGNAL_KEY = 'sf-staff-session-epoch';
+const LOGOUT_SIGNAL_KEY = 'sf-staff-logout-epoch';
+const LEGACY_KEYS = ['sf-session-access', 'sf-session-password-change-required'];
+const BLOCKED_ROLE_TOKENS = new Set([
+  'ceo',
+  'owner',
+  'director',
+  'manager',
+  'administrator',
+  'admin',
+]);
+const BLOCKED_ROLE_PHRASES = ['chief-executive', 'head-of-department', 'head-of-dept'];
 
-function readStorage(key) {
-  try {
-    return localStorage.getItem(key) || null;
-  } catch {
-    return null;
+let hydrationRequest = null;
+
+function removeLegacyCredentials() {
+  for (const storage of [globalThis.localStorage, globalThis.sessionStorage]) {
+    try {
+      LEGACY_KEYS.forEach((key) => storage?.removeItem(key));
+    } catch {
+      // A blocked storage API cannot weaken the cookie-owned session.
+    }
   }
 }
 
-function writeStorage(key, value) {
+function deviceId() {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
+    let value = sessionStorage.getItem(DEVICE_KEY);
+    if (!value) {
+      value = globalThis.crypto?.randomUUID?.() ??
+        `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      sessionStorage.setItem(DEVICE_KEY, value);
+    }
+    return value;
   } catch {
-    // Private browsing or storage restrictions should not prevent an in-memory session.
+    return '';
   }
 }
 
-function notifySessionChange() {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(AUTH_EVENT));
+function broadcast(key, reason) {
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({ reason, at: Date.now(), nonce: Math.random().toString(16).slice(2) }),
+    );
+  } catch {
+    // Other tabs still validate the shared cookie on their next request.
+  }
 }
 
-async function parsePayload(response) {
-  if (response.status === 204) return null;
-  return response.json().catch(() => null);
+function normalizedRoleLabel(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-function unwrap(payload) {
-  if (payload && payload.success === true && Object.hasOwn(payload, 'data')) return payload.data;
-  return payload;
+function roleLabels(user) {
+  const memberships = Array.isArray(user?.role_memberships) ? user.role_memberships : [];
+  return memberships.flatMap((membership) => [
+    membership?.account_type_slug,
+    membership?.account_type_name,
+    membership?.legacy_role,
+    membership?.role,
+  ]).filter(Boolean);
 }
 
-function authError(response, method, path, payload) {
-  return new ApiError(response.status, method, path, payload, response.headers.get('Retry-After'));
+function hasBlockedManagementRole(user) {
+  return roleLabels(user).some((label) => {
+    const normalized = normalizedRoleLabel(label);
+    const tokens = normalized.split('-').filter(Boolean);
+    return (
+      tokens.some((token) => BLOCKED_ROLE_TOKENS.has(token)) ||
+      BLOCKED_ROLE_PHRASES.some((phrase) => normalized.includes(phrase))
+    );
+  });
 }
 
-function stableDeviceId() {
-  const existing = readStorage(DEVICE_KEY);
-  if (existing) return existing;
-
-  const value =
-    globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  writeStorage(DEVICE_KEY, value);
-  return value;
+function classify(user, features, forcePasswordChange = false) {
+  const allowedKind = user?.principal_kind === 'staff' || user?.principal_kind === 'teacher';
+  if (!allowedKind || hasBlockedManagementRole(user)) {
+    resetHttpSessionPolicy();
+    return {
+      status: 'forbidden',
+      user,
+      features,
+      reason: 'This role account belongs in a different StarForge application.',
+    };
+  }
+  configureHttpSessionPolicy(user);
+  return {
+    status: user?.must_change_password || forcePasswordChange
+      ? 'password-change'
+      : 'authenticated',
+    user,
+    features,
+  };
 }
 
-function responseRequiresPasswordChange(data) {
-  return Boolean(
-    data?.mustChangePassword ??
-      data?.must_change_password ??
-      data?.passwordChangeRequired ??
-      data?.password_change_required,
+function codeOf(error) {
+  return String(error?.code ?? error?.body?.code ?? '').toLowerCase();
+}
+
+/** Validate the shared cookie and the backend's staff-only product gate. */
+export function hydrateSession({ forcePasswordChange = false } = {}) {
+  if (!isApiMode()) {
+    return Promise.resolve(
+      setSessionSnapshot({ status: 'authenticated', user: null }, 'mock-session'),
+    );
+  }
+  if (hydrationRequest) return hydrationRequest;
+
+  setSessionSnapshot(
+    { ...getSessionSnapshot(), status: 'checking', error: null },
+    'checking',
+  );
+  const pending = (async () => {
+    const [identityResult, gateResult] = await Promise.allSettled([
+      httpClient.get('users/me/', { auth: false, invalidateOnUnauthorized: false }),
+      httpClient.get('org/app-status/', { auth: false, invalidateOnUnauthorized: false }),
+    ]);
+
+    if (identityResult.status === 'rejected') {
+      const error = identityResult.reason;
+      resetHttpSessionPolicy();
+      if (error?.status === 401) {
+        return setSessionSnapshot({ status: 'anonymous' }, 'anonymous');
+      }
+      return setSessionSnapshot({ status: 'error', error }, 'bootstrap-error');
+    }
+
+    const user = identityResult.value;
+    const passwordChange = Boolean(user?.must_change_password || forcePasswordChange);
+    if (gateResult.status === 'rejected' && !passwordChange) {
+      const error = gateResult.reason;
+      if (error?.status === 403 && codeOf(error) === 'staff_app_account_required') {
+        return setSessionSnapshot(classify(user, []), 'forbidden');
+      }
+      if (error?.status === 401) {
+        resetHttpSessionPolicy();
+        return setSessionSnapshot({ status: 'anonymous' }, 'anonymous');
+      }
+      return setSessionSnapshot({ status: 'error', user, error }, 'bootstrap-error');
+    }
+
+    const features = gateResult.status === 'fulfilled' && Array.isArray(gateResult.value?.features)
+      ? gateResult.value.features
+      : [];
+    return setSessionSnapshot(
+      classify(user, features, forcePasswordChange),
+      passwordChange ? 'password-change-required' : 'authenticated',
+    );
+  })();
+
+  hydrationRequest = pending;
+  void pending.finally(() => {
+    if (hydrationRequest === pending) hydrationRequest = null;
+  });
+  return pending;
+}
+
+export function requiresPasswordChange() {
+  return getSessionSnapshot().status === 'password-change';
+}
+
+export function hasAuthenticatedSession() {
+  return ['authenticated', 'password-change', 'forbidden'].includes(
+    getSessionSnapshot().status,
   );
 }
 
-export function getToken() {
-  return token;
+function validateCredentials(username, password) {
+  const cleanUsername = String(username ?? '').trim();
+  const exactPassword = String(password ?? '');
+  if (!cleanUsername || !exactPassword) {
+    throw new ApiError(400, 'POST', 'auth/role-login/', {
+      code: 'validation_error',
+      message: 'Username and password are required.',
+    });
+  }
+  if (cleanUsername.length > 150 || exactPassword.length > 128 || /\p{Cc}/u.test(cleanUsername) || /\p{Cc}/u.test(exactPassword)) {
+    throw new ApiError(400, 'POST', 'auth/role-login/', {
+      code: 'validation_error',
+      message: 'Check the sign-in details and try again.',
+    });
+  }
+  return { username: cleanUsername, password: exactPassword };
 }
 
-export function setToken(next) {
-  token = typeof next === 'string' && next ? next : null;
-  writeStorage(STORAGE_KEY, token);
-  notifySessionChange();
-}
-
-export function clearToken() {
-  token = null;
-  passwordChangeRequired = false;
-  writeStorage(STORAGE_KEY, null);
-  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, null);
-  notifySessionChange();
-}
-
-/** Whether the active session may only replace a temporary password. */
-export function requiresPasswordChange() {
-  return Boolean(token && passwordChangeRequired);
-}
-
-/** Set when the API says the session is restricted to a password change. */
-export function markPasswordChangeRequired() {
-  passwordChangeRequired = true;
-  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, 'true');
-  notifySessionChange();
-}
-
-function markPasswordChangeComplete() {
-  passwordChangeRequired = false;
-  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, null);
-  notifySessionChange();
-}
-
-export function subscribeToSession(listener) {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener(AUTH_EVENT, listener);
-  return () => window.removeEventListener(AUTH_EVENT, listener);
-}
-
-/** Authenticate a staff user with username and password. */
+/** Authenticate through the role-native endpoint and confirm the resulting cookie. */
 export async function login({ username, password }) {
-  const path = isLocalApiMode() ? LOCAL_LOGIN_PATH : REMOTE_LOGIN_PATH;
-  if (!path) {
-    throw new ApiError(500, 'POST', 'auth/login', {
-      code: 'auth_endpoint_not_configured',
-      message: 'This deployment has no configured username/password login endpoint.',
-    });
-  }
-  const response = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept-Language': getLocale() },
-    body: JSON.stringify({
-      username: String(username ?? '').trim(),
-      password: String(password ?? ''),
-      device_id: stableDeviceId(),
+  const credentials = validateCredentials(username, password);
+  removeLegacyCredentials();
+  const browserSession = await httpClient.get('auth/session/', {
+    auth: false,
+    invalidateOnUnauthorized: false,
+  });
+  const result = await httpClient.post(
+    'auth/role-login/',
+    {
+      ...credentials,
       platform: 'web',
-    }),
-  });
-  const payload = await parsePayload(response);
-  if (!response.ok || payload?.success === false) throw authError(response, 'POST', path, payload);
-
-  const data = unwrap(payload);
-  const access = data?.access ?? data?.token;
-  if (typeof access !== 'string' || !access) {
-    throw new ApiError(500, 'POST', path, {
-      code: 'invalid_auth_response',
-      message: 'The server did not return a session token.',
-    });
-  }
-  token = access;
-  passwordChangeRequired = responseRequiresPasswordChange(data);
-  writeStorage(STORAGE_KEY, token);
-  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, passwordChangeRequired ? 'true' : null);
-  notifySessionChange();
-  return data;
-}
-
-/** Replace a temporary password before any staff workspace can be opened. */
-export async function changePassword({ currentPassword, newPassword }) {
-  const current = getToken();
-  if (!current) {
-    throw new ApiError(401, 'POST', 'auth/change-password', {
-      code: 'authentication_failed',
-      message: 'Your session has ended. Please sign in again.',
-    });
-  }
-
-  const path = isLocalApiMode() ? 'auth/change-password' : 'auth/change-password/';
-  const response = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${current}`,
-      'Content-Type': 'application/json',
-      'Accept-Language': getLocale(),
+      device_id: deviceId(),
     },
-    body: JSON.stringify({ currentPassword, newPassword }),
-  });
-  const payload = await parsePayload(response);
-  if (!response.ok || payload?.success === false) throw authError(response, 'POST', path, payload);
-
-  markPasswordChangeComplete();
-  return unwrap(payload);
+    {
+      auth: false,
+      csrfToken: browserSession?.csrf_token,
+      sessionTransport: 'cookie',
+      invalidateOnUnauthorized: false,
+    },
+  );
+  const next = await hydrateSession({ forcePasswordChange: Boolean(result?.must_change_password) });
+  if (next.status === 'anonymous') {
+    throw new ApiError(401, 'GET', 'users/me/', {
+      code: 'authentication_failed',
+      message: 'The browser session could not be confirmed.',
+    });
+  }
+  if (next.status === 'error') throw next.error;
+  broadcast(SESSION_SIGNAL_KEY, 'signed-in');
+  return next;
 }
 
-/** End the server-side session when possible, then always remove it locally. */
-export async function logout() {
-  const current = getToken();
-  if (!current) return;
-
-  const path = isLocalApiMode() ? 'auth/logout' : 'auth/logout/';
-  try {
-    const response = await fetch(apiUrl(path), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${current}`,
-        'Accept-Language': getLocale(),
-        ...(isLocalApiMode() ? {} : { 'Content-Type': 'application/json' }),
-      },
-      body: undefined,
+/** Replace a temporary password using the backend's exact request contract. */
+export async function changePassword({ currentPassword, newPassword }) {
+  const oldPassword = String(currentPassword ?? '');
+  const replacement = String(newPassword ?? '');
+  if (!oldPassword || !replacement) {
+    throw new ApiError(400, 'POST', 'auth/password/change/', {
+      code: 'validation_error',
+      message: 'Current and new passwords are required.',
     });
-    const payload = await parsePayload(response);
-    if (!response.ok && response.status !== 401) throw authError(response, 'POST', path, payload);
-  } finally {
-    clearToken();
   }
+  await httpClient.post('auth/password/change/', {
+    old_password: oldPassword,
+    new_password: replacement,
+  });
+  const next = await hydrateSession();
+  if (next.status !== 'authenticated' && next.status !== 'forbidden') {
+    throw next.error ?? new ApiError(409, 'GET', 'users/me/', {
+      code: 'session_confirmation_failed',
+      message: 'The password change could not be confirmed.',
+    });
+  }
+  broadcast(SESSION_SIGNAL_KEY, 'password-changed');
+  return next;
+}
+
+/** Revoke the current server session before clearing all private UI state. */
+export async function logout() {
+  let failure = null;
+  try {
+    await httpClient.post('auth/logout/', undefined, {
+      timeout: 4_000,
+      invalidateOnUnauthorized: false,
+    });
+  } catch (error) {
+    if (error?.status !== 401) failure = error;
+  }
+  hydrationRequest = null;
+  resetHttpSessionPolicy();
+  removeLegacyCredentials();
+  try {
+    sessionStorage.removeItem(DEVICE_KEY);
+  } catch {
+    // The in-memory transition still completes.
+  }
+  setSessionSnapshot(
+    failure
+      ? {
+          status: 'signout-unconfirmed',
+          error: failure,
+          reason: 'Private data was cleared, but the server could not confirm sign-out.',
+        }
+      : { status: 'anonymous' },
+    failure ? 'signout-unconfirmed' : 'signed-out',
+  );
+  broadcast(LOGOUT_SIGNAL_KEY, failure ? 'unconfirmed' : 'confirmed');
+  if (failure) throw failure;
+}
+
+if (typeof window !== 'undefined') {
+  removeLegacyCredentials();
+  window.addEventListener('storage', (event) => {
+    if (event.key === SESSION_SIGNAL_KEY && event.newValue) void hydrateSession();
+    if (event.key === LOGOUT_SIGNAL_KEY && event.newValue) {
+      hydrationRequest = null;
+      resetHttpSessionPolicy();
+      setSessionSnapshot({ status: 'anonymous' }, 'signed-out-in-another-tab');
+    }
+  });
 }

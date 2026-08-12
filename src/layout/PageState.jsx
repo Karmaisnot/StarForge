@@ -1,15 +1,11 @@
 import { useT } from '@/hooks/useT.js';
+import { PageLoader } from '@/ceo/components/feedback.jsx';
 import styles from './PageState.module.css';
 
-/** Lightweight loading spinner shown while a page's data resolves. */
+/** The same branded loading state used throughout the CEO application. */
 export function PageLoading({ label }) {
   const { t } = useT();
-  return (
-    <div className={styles.wrap}>
-      <div className={styles.spinner} />
-      <span>{label ?? t('common.loading')}</span>
-    </div>
-  );
+  return <PageLoader label={label ?? t('common.loading')} />;
 }
 
 /** Error panel for failed loads. */

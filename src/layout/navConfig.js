@@ -46,6 +46,7 @@ function resourceNav(resource) {
     label: resource.title,
     icon: resource.icon,
     access: resource.permission,
+    permissions: resource.permissions,
     resourceId: resource.id,
   };
 }
@@ -69,11 +70,22 @@ export const SETTINGS_NAV = {
   access: 'staff',
   roles: ALL_STAFF,
 };
-export const ALL_NAV = [...PRIMARY_NAV, ...SECONDARY_NAV, SETTINGS_NAV];
+export const ACCOUNT_NAV = {
+  id: 'account',
+  path: '/account',
+  label: 'My profile',
+  icon: 'user',
+  access: 'staff',
+  roles: ALL_STAFF,
+};
+export const ALL_NAV = [...PRIMARY_NAV, ...SECONDARY_NAV, ACCOUNT_NAV, SETTINGS_NAV];
 
 export function visibleNav(items, profile) {
   return items.filter((item) => {
     if (item.access === 'staff') return isStaffProfile(profile);
+    if (item.permissions) {
+      return item.permissions.some((permission) => canAccess(profile, permission));
+    }
     if (item.access) return canAccess(profile, item.access);
     const role = profile?.roleKey;
     return !role || !item.roles || item.roles.includes(role);
@@ -104,8 +116,14 @@ export function accessForPath(pathname) {
   const resource = DATA_SOURCE === 'remote'
     ? staffResourceForPath(pathname) ?? (aliased ? STAFF_RESOURCE_BY_ID[aliased] : null)
     : null;
-  if (resource) return { access: resource.permission, resourceId: resource.id };
-  if (String(pathname).startsWith('/today') || String(pathname).startsWith('/settings')) {
+  if (resource) {
+    return {
+      access: resource.permission,
+      permissions: resource.permissions,
+      resourceId: resource.id,
+    };
+  }
+  if (String(pathname).startsWith('/today') || String(pathname).startsWith('/settings') || String(pathname).startsWith('/account')) {
     return { access: 'staff' };
   }
   const nav = navItemForPath(pathname);
@@ -117,6 +135,9 @@ export function accessForPath(pathname) {
 export function profileCanOpen(item, profile) {
   if (item?.denied) return false;
   if (item?.access === 'staff') return isStaffProfile(profile);
+  if (item?.permissions) {
+    return item.permissions.some((permission) => canAccess(profile, permission));
+  }
   if (item?.access) return canAccess(profile, item.access);
   if (item?.roles) return item.roles.includes(profile?.roleKey);
   return true;

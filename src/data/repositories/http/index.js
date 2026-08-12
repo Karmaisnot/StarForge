@@ -4,6 +4,7 @@
 import { getLocale } from '@/i18n/locale.js';
 import { ApiError } from '@/data/http/apiError.js';
 import { httpClient } from '@/data/http/httpClient.js';
+import { getSessionSnapshot } from '@/data/http/sessionState.js';
 import { createStudentWorkbookPayload } from '@/data/spreadsheet.js';
 import { canAccess, profilePermissions } from '@/domain/access.js';
 import {
@@ -250,11 +251,21 @@ function mapTeacher(user) {
   }
   const membership = memberships[0] ?? {};
   const roles = memberships
-    .map((item) => item?.role ?? item?.account_type_slug ?? item?.account_type_name)
+    .flatMap((item) => [
+      item?.account_type_slug,
+      item?.legacy_role,
+      item?.role,
+      item?.account_type_name,
+    ])
     .filter(Boolean)
     .map((role) => String(role).trim().toLowerCase().replace(/[\s-]+/g, '_'));
-  const roleKey = roles[0] ?? membership.account_kind ?? 'staff';
-  const rawRole = membership.account_type_name ?? membership.role ?? membership.account_type_slug ?? roleKey;
+  const roleKey = roles[0] ?? user?.principal_kind ?? membership.account_kind ?? 'staff';
+  const rawRole =
+    membership.account_type_name ??
+    membership.legacy_role ??
+    membership.role ??
+    membership.account_type_slug ??
+    roleKey;
   const profile = {
     id: user?.id,
     name: displayName(user),
@@ -265,12 +276,22 @@ function mapTeacher(user) {
     roles,
     roleMemberships: memberships,
     accountKind:
-      membership.account_kind ?? (roles.includes('teacher') ? 'teacher' : roles.length ? 'staff' : 'unknown'),
+      user?.principal_kind ??
+      membership.account_kind ??
+      (roles.includes('teacher') ? 'teacher' : roles.length ? 'staff' : 'unknown'),
     branchId: membership.branch ?? null,
-    branch: membership.branch ? `${copy().branch} #${membership.branch}` : '—',
+    branch:
+      membership.branch_name ??
+      (membership.branch ? `${copy().branch} #${membership.branch}` : '—'),
     preferredLanguage: user?.preferred_language ?? null,
     subjects: [],
-    permissionCodes: asList(user?.permissions ?? user?.permission_codes),
+    permissionCodes: asList(
+      user?.effective_permissions ?? user?.permissions ?? user?.permission_codes,
+    ),
+    permissionsAuthoritative: Array.isArray(user?.effective_permissions),
+    effective_permissions: asList(user?.effective_permissions),
+    readOnlySession: Boolean(user?.read_only_session),
+    scopes: asList(user?.scopes),
   };
   return { ...profile, permissionCodes: profilePermissions(profile) };
 }
@@ -279,9 +300,12 @@ function mapDevice(device) {
   return {
     id: device.id,
     platform: device.platform,
-    userAgent: device.user_agent,
-    lastSeenAt: device.last_seen_at,
+    userAgent: [device.device, device.browser].filter(Boolean).join(' · '),
+    lastSeenAt: device.last_activity_at ?? device.last_seen_at,
     createdAt: device.created_at,
+    current: Boolean(device.current_session),
+    readOnly: Boolean(device.read_only),
+    expiresAt: device.expires_at,
   };
 }
 
@@ -622,17 +646,23 @@ export class HttpAccountRepository extends IAccountRepository {
   #settings = {};
 
   async getTeacher() {
-    return mapTeacher(await httpClient.get('users/me/'));
+    // SessionGate already fetched the authoritative identity. Reuse it for the
+    // shell instead of delaying first paint with a duplicate /users/me request.
+    const bootstrapped = getSessionSnapshot().user;
+    return mapTeacher(bootstrapped ?? (await httpClient.get('users/me/')));
   }
 
   async updateTeacher(patch) {
-    if (patch && Object.keys(patch).length) {
-      throw clientContractError(
-        'users/me/',
-        'The current tenant API exposes the staff profile as read-only. Ask an authorized registrar to update identity details.',
-      );
+    const body = {};
+    if (typeof patch?.name === 'string' && patch.name.trim()) {
+      const [firstName, ...lastName] = patch.name.trim().split(/\s+/);
+      body.first_name = firstName;
+      body.last_name = lastName.join(' ');
     }
-    return this.getTeacher();
+    const updated = Object.keys(body).length
+      ? await httpClient.patch('users/me/', body)
+      : await httpClient.get('users/me/');
+    return mapTeacher(updated);
   }
 
   async getSettings() {
@@ -642,16 +672,19 @@ export class HttpAccountRepository extends IAccountRepository {
 
   async patchSettings(patch) {
     const next = { ...this.#settings, ...patch };
+    if (patch?.locale && ['uz', 'ru', 'en'].includes(patch.locale)) {
+      await httpClient.patch('users/me/', { preferred_language: patch.locale });
+    }
     this.#settings = next;
     return { ...next };
   }
 
   async listSessions() {
-    return asList(await httpClient.get('users/devices/')).map(mapDevice);
+    return asList(await httpClient.get('users/sessions/?page_size=100')).map(mapDevice);
   }
 
   ejectSession(id) {
-    return httpClient.delete(`users/devices/${id}/`);
+    return httpClient.delete(`users/sessions/${id}/`);
   }
 }
 
@@ -961,12 +994,21 @@ export class HttpTaskRepository extends ITaskRepository {
 
 export class LegacyHttpDashboardRepository extends IDashboardRepository {
   async getToday() {
-    const [me, rawTasks, rawMeetings, rawRequests, rawUnread] = await Promise.all([
-      optional(() => httpClient.get('users/me/'), null),
-      optional(() => httpClient.get('tasks/mine/?page_size=5'), []),
-      optional(() => httpClient.get('meetings/upcoming/?page_size=20'), []),
-      optional(() => httpClient.get('approvals/requests/?page_size=20'), []),
-      optional(() => httpClient.get('notifications/unread-count/'), { count: 0 }),
+    const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    const profile = mapTeacher(me);
+    const [rawTasks, rawMeetings, rawRequests, rawUnread] = await Promise.all([
+      canAccess(profile, 'tasks')
+        ? optional(() => httpClient.get('tasks/mine/?page_size=5'), [])
+        : [],
+      canAccess(profile, 'meeting')
+        ? optional(() => httpClient.get('meetings/upcoming/?page_size=5'), [])
+        : [],
+      canAccess(profile, 'approvals')
+        ? optional(() => httpClient.get('approvals/requests/?page_size=5'), [])
+        : [],
+      canAccess(profile, 'notifications')
+        ? optional(() => httpClient.get('notifications/unread-count/'), { count: 0 })
+        : { count: 0 },
     ]);
     // This endpoint is only installed for teacher account types. Staff such as a
     // Director receive a lean but complete dashboard instead of a 404 page.
@@ -1103,12 +1145,16 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
       })),
       recentCards: [],
       pendingTasks: tasks,
-      aiInsight: {
-        eyebrow: 'AI',
-        count: '',
-        quote: '',
-        chips: [],
-      },
+      // Never render or deep-link the AI action center unless the live account
+      // carries the exact application grant.
+      aiInsight: canAccess(profile, 'ai_app')
+        ? {
+            eyebrow: 'AI',
+            count: '',
+            quote: '',
+            chips: [],
+          }
+        : null,
       printQueue: [],
       mgmtMention: (teacherMode ? meeting : staffMeeting)
         ? {
@@ -1118,13 +1164,15 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
             time: formatTime((teacherMode ? meeting : staffMeeting).starts_at),
           }
         : { name: copy().thread, role: '', message: '', time: '' },
-      spotlight: {
-        name: Object.keys(dashboard.level_groups ?? {})[0] || '—',
-        sub: `${groups} ${copy().group}`,
-        tone: 'neutral',
-        toneLabel: '',
-        stats: [],
-      },
+      spotlight: groups > 0
+        ? {
+            name: Object.keys(dashboard.level_groups ?? {})[0] || copy().group,
+            sub: `${groups} ${copy().group}`,
+            tone: 'neutral',
+            toneLabel: '',
+            stats: [],
+          }
+        : null,
       activity: [],
     };
   }

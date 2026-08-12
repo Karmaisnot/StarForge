@@ -1,0 +1,25 @@
+/* Staff-only refinements layered over the exact CEO shell primitives. */
+
+.ad-shell-v2 .ad-rail-link > em {
+  min-width: 20px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--sf-primary-soft);
+  color: var(--sf-primary);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 820;
+  line-height: 1;
+  text-align: center;
+}
+
+.ad-shell-v2 .ad-main > * {
+  width: 100%;
+}
+
+/* Keep people directories information-dense on normal laptop displays. */
+@media (min-width: 1180px) {
+  .ad-shell-v2 .fw-person-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  }
+}

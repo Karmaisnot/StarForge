@@ -1,60 +1,127 @@
 import { useNavigate } from 'react-router-dom';
-import { Avatar, Icon, StarMark } from '@/ui';
+import { Icon } from '@/ui';
+import { SfAvatar, SfStar } from '@/ceo/components/primitives.jsx';
 import { useT } from '@/hooks/useT.js';
+import { useTheme } from '@/hooks/useTheme.js';
 import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 import { canAccess } from '@/domain/access.js';
-import styles from './AppShell.module.css';
 import { NotificationCenter } from './NotificationCenter.jsx';
 
-/**
- * @param {{ title: string, teacher: object|null, drawerOpen: boolean, onOpenDrawer: Function,
- *           onOpenSearch: Function }} props
- */
-export function TopBar({ title, teacher, drawerOpen, onOpenDrawer, onOpenSearch }) {
+function profileScope(teacher) {
+  const names = [
+    ...new Set(
+      (teacher?.roleMemberships ?? [])
+        .map((membership) => membership?.branch_name)
+        .filter(Boolean),
+    ),
+  ];
+  if (names.length > 1) return `${names.length} assigned branches`;
+  return names[0] || teacher?.branch || 'Assigned scope';
+}
+/** CEO masthead geometry with staff-owned navigation, theme, alerts, and profile. */
+export function TopBar({
+  title,
+  teacher,
+  drawerOpen,
+  onOpenDrawer,
+  onOpenSearch,
+}) {
   const navigate = useNavigate();
   const { t } = useT();
-  const showAi = DATA_SOURCE !== 'remote' ? teacher?.roleKey === 'teacher' : canAccess(teacher, 'ai_app');
+  const { dark, toggleDark } = useTheme();
+  const showAi =
+    DATA_SOURCE !== 'remote' ? teacher?.roleKey === 'teacher' : canAccess(teacher, 'ai_app');
   const showNotifications = DATA_SOURCE !== 'remote' || canAccess(teacher, 'notifications');
+  const roleLabel = teacher?.role || (teacher?.accountKind === 'teacher' ? 'Teacher' : 'Staff');
+  const accountPath = DATA_SOURCE === 'remote' ? '/account/profile' : '/settings';
+
   return (
-    <header className={styles.top}>
-      <button
-        className={styles.hamburger}
-        onClick={onOpenDrawer}
-        aria-label={t('shell.menu')}
-        aria-controls="main-navigation"
-        aria-expanded={drawerOpen}
-      >
-        <Icon name="filter" size={20} />
-      </button>
-      <div className={styles.crumb}>
-        <StarMark size={18} color="var(--sf-primary)" />
-        <Icon name="chevR" size={12} style={{ color: 'var(--sf-muted)' }} />
-        <span className={styles.crumbLabel}>{title}</span>
-      </div>
-      <button
-        type="button"
-        className={styles.search}
-        onClick={onOpenSearch}
-        aria-label={t('shell.searchAll')}
-      >
-        <Icon name="search" size={16} style={{ color: 'var(--sf-muted)' }} />
-        <span>{t('shell.searchAll')}</span>
-        <span className={styles.searchKbd}>⌘K</span>
-      </button>
-      <div className={styles.topActions}>
-        {showAi && (
-          <button className={styles.topBtn} title={t('nav.ai')} onClick={() => navigate('/ai')}>
-            <Icon name="ai" size={18} />
-          </button>
-        )}
-        {showNotifications && <NotificationCenter />}
+    <header className="ad-masthead" data-layout="sidebar">
+      <div className="ad-top">
         <button
-          className={styles.topAvatar}
-          onClick={() => navigate('/settings')}
-          aria-label={t('settings.profile')}
+          type="button"
+          className="ad-masthead-brand"
+          onClick={() => navigate('/today')}
+          aria-label="StarForge EDU"
         >
-          <Avatar name={teacher?.name ?? 'A'} size={32} color="var(--sf-primary)" />
+          <span aria-hidden="true">
+            <SfStar size={20} color="currentColor" />
+          </span>
+          <strong>
+            StarForge <small>EDU</small>
+          </strong>
         </button>
+
+        <div className="ad-top-context">
+          <span>
+            {teacher?.accountKind === 'teacher' ? 'Teacher' : 'Staff'} · {profileScope(teacher)}
+          </span>
+          <strong>{title}</strong>
+        </div>
+
+        <div className="ad-command">
+          <button
+            type="button"
+            className="ad-command-trigger"
+            onClick={onOpenSearch}
+            aria-label={t('shell.searchAll')}
+          >
+            <Icon name="search" size={16} />
+            <span>{t('shell.searchAll')}</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        </div>
+
+        <div className="ad-top-actions">
+          <button
+            type="button"
+            className="ad-top-ic"
+            onClick={toggleDark}
+            aria-label={dark ? t('auth.useLightTheme') : t('auth.useDarkTheme')}
+            title={dark ? t('auth.useLightTheme') : t('auth.useDarkTheme')}
+          >
+            <Icon name={dark ? 'moon' : 'sun'} size={17} />
+          </button>
+
+          {showAi ? (
+            <button
+              type="button"
+              className="ad-top-ic"
+              title={t('nav.ai')}
+              onClick={() => navigate('/ai')}
+            >
+              <Icon name="ai" size={17} />
+            </button>
+          ) : null}
+
+          {showNotifications ? <NotificationCenter shell /> : null}
+
+          <button
+            type="button"
+            className="ad-top-av"
+            onClick={() => navigate(accountPath)}
+            aria-label={`${teacher?.name ?? 'Staff member'} · ${t('settings.profile')}`}
+          >
+            <SfAvatar name={teacher?.name ?? 'A'} size={32} color="var(--sf-primary)" decorative />
+            <span>
+              <strong>{teacher?.name ?? 'Staff member'}</strong>
+              <small>{roleLabel}</small>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="ad-mobile-navigator"
+            onClick={onOpenDrawer}
+            data-navigator-trigger
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
+            aria-controls="main-navigation"
+            aria-label={t('shell.menu')}
+          >
+            <Icon name="filter" size={18} />
+          </button>
+        </div>
       </div>
     </header>
   );

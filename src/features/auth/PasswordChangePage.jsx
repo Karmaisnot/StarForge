@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   changePassword,
-  getToken,
+  getSessionSnapshot,
   logout,
-  requiresPasswordChange,
+  subscribeToSession,
 } from '@/data/http/authToken.js';
 import { StarMark } from '@/ui';
 import { useT } from '@/hooks/useT.js';
@@ -19,9 +19,12 @@ export function PasswordChangePage() {
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [session, setSession] = useState(getSessionSnapshot);
 
-  if (!getToken()) return <Navigate to="/login" replace />;
-  if (!requiresPasswordChange()) return <Navigate to="/today" replace />;
+  useEffect(() => subscribeToSession(setSession), []);
+
+  if (session.status === 'anonymous') return <Navigate to="/login" replace />;
+  if (session.status === 'authenticated') return <Navigate to="/today" replace />;
 
   const submit = async (event) => {
     event.preventDefault();

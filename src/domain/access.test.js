@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccess, canWrite, isStaffProfile } from './access.js';
+import { canAccess, canPerform, canRead, canWrite, isStaffProfile } from './access.js';
 
 const profile = (role) => ({ id: 1, roleKey: role, roles: [role], accountKind: role === 'teacher' ? 'teacher' : 'staff' });
 
@@ -40,5 +40,46 @@ describe('staff access matrix', () => {
     expect(isStaffProfile(profile('head_of_dept'))).toBe(false);
     expect(isStaffProfile(profile('ceo'))).toBe(false);
     expect(isStaffProfile({ roleKey: 'student', roles: ['student'], accountKind: 'student' })).toBe(false);
+  });
+
+  it('never widens an authoritative live permission set from a familiar role name', () => {
+    const teacher = {
+      ...profile('teacher'),
+      permissionsAuthoritative: true,
+      permissionCodes: [],
+    };
+    expect(canAccess(teacher, 'cohorts')).toBe(false);
+
+    const scoped = { ...teacher, permissionCodes: ['cohorts:read'] };
+    expect(canAccess(scoped, 'cohorts')).toBe(true);
+    expect(canWrite(scoped, 'cohorts')).toBe(false);
+  });
+
+  it('suppresses every mutation control for a read-only session', () => {
+    const cashier = { ...profile('cashier'), readOnlySession: true };
+    expect(canAccess(cashier, 'payments')).toBe(true);
+    expect(canWrite(cashier, 'payments')).toBe(false);
+  });
+
+  it('keeps workflow-only grants separate from collection reads', () => {
+    const cashier = {
+      ...profile('cashier'),
+      permissionsAuthoritative: true,
+      permissionCodes: ['payments:write'],
+    };
+    expect(canAccess(cashier, 'payments')).toBe(true);
+    expect(canRead(cashier, 'payments')).toBe(false);
+    expect(canWrite(cashier, 'payments')).toBe(true);
+  });
+
+  it('supports narrow action verbs without widening CRUD authority', () => {
+    const approver = {
+      ...profile('assistant'),
+      permissionsAuthoritative: true,
+      permissionCodes: ['approvals:approve'],
+    };
+    expect(canPerform(approver, 'approvals', 'approve')).toBe(true);
+    expect(canRead(approver, 'approvals')).toBe(false);
+    expect(canWrite(approver, 'approvals')).toBe(false);
   });
 });

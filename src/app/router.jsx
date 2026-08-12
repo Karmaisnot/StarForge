@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { SessionGate } from '@/app/SessionGate.jsx';
 import { RouteErrorPage } from '@/app/RouteErrorPage.jsx';
-import { AppShell } from '@/layout/AppShell.jsx';
 import { PageLoading } from '@/layout/PageState.jsx';
 import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 
@@ -12,6 +11,7 @@ const PasswordChangePage = lazyNamed(
   () => import('@/features/auth/PasswordChangePage.jsx'),
   'PasswordChangePage',
 );
+const AppShell = lazyNamed(() => import('@/layout/AppShell.jsx'), 'AppShell');
 const TodayPage = lazyNamed(() => import('@/features/today/TodayPage.jsx'), 'TodayPage');
 const CohortsPage = lazyNamed(() => import('@/features/cohorts/CohortsPage.jsx'), 'CohortsPage');
 const TasksPage = lazyNamed(() => import('@/features/tasks/TasksPage.jsx'), 'TasksPage');
@@ -30,13 +30,22 @@ const ResourceWorkspacePage = lazyNamed(
   () => import('@/features/resources/ResourceWorkspacePage.jsx'),
   'ResourceWorkspacePage',
 );
+const StaffStudentsWorkspace = lazyNamed(
+  () => import('@/features/ceo/CeoPeopleWorkspaces.jsx'),
+  'StaffStudentsWorkspace',
+);
+const StaffGroupsWorkspace = lazyNamed(
+  () => import('@/features/ceo/CeoPeopleWorkspaces.jsx'),
+  'StaffGroupsWorkspace',
+);
+const StaffAccountWorkspace = lazyNamed(
+  () => import('@/features/ceo/CeoAccountWorkspace.jsx'),
+  'StaffAccountWorkspace',
+);
 
 const page = (element) => <Suspense fallback={<PageLoading />}>{element}</Suspense>;
 const remote = DATA_SOURCE === 'remote';
-const resourcePage = () => (remote ? page(<ResourceWorkspacePage />) : <Navigate to="/today" replace />);
-const legacyOrResource = (legacy) => (remote ? page(<ResourceWorkspacePage />) : page(legacy));
-const legacyOrToday = (legacy) => (remote ? <Navigate to="/today" replace /> : page(legacy));
-const legacyOrPath = (legacy, path) => (remote ? <Navigate to={path} replace /> : page(legacy));
+const resourcePage = () => page(<ResourceWorkspacePage />);
 
 export const router = createBrowserRouter([
   {
@@ -50,53 +59,63 @@ export const router = createBrowserRouter([
     children: [
       { path: 'change-password', element: page(<PasswordChangePage />) },
       {
-        element: <AppShell />,
+        element: page(<AppShell />),
         children: [
           { index: true, element: <Navigate to="/today" replace /> },
           { path: 'today', element: page(<TodayPage />) },
 
-          // Production resource workspaces: every route below maps directly to
-          // an endpoint in the supplied Django tenant backend.
-          { path: 'students', element: resourcePage() },
-          { path: 'staff', element: resourcePage() },
-          { path: 'teachers', element: resourcePage() },
-          { path: 'parents', element: resourcePage() },
-          { path: 'schedule', element: resourcePage() },
-          { path: 'attendance', element: resourcePage() },
-          { path: 'academics', element: resourcePage() },
-          { path: 'assignments', element: resourcePage() },
-          { path: 'content', element: resourcePage() },
-          { path: 'payments', element: resourcePage() },
-          { path: 'printing', element: resourcePage() },
-          { path: 'reports', element: resourcePage() },
-          { path: 'audit', element: resourcePage() },
-          { path: 'organization/branches', element: resourcePage() },
-          { path: 'organization/departments', element: resourcePage() },
-
+          // Production workspaces are generated from the contract-backed
+          // catalogue so new role domains cannot silently miss a route.
           // Existing routes remain usable for the local development server and
           // isolated visual mode; their remote counterparts use the real API
           // resource workspace instead of the previous mock contracts.
-          { path: 'cohorts', element: legacyOrResource(<CohortsPage />) },
-          { path: 'cohorts/:cohortId', element: legacyOrResource(<CohortsPage />) },
-          { path: 'finance', element: legacyOrResource(<FinancePage />) },
-          { path: 'ai', element: legacyOrResource(<AiPage />) },
-          { path: 'notifications', element: legacyOrResource(<TodayPage />) },
-          { path: 'academic', element: legacyOrPath(<AcademicPage />, '/academics') },
-          { path: 'materials', element: legacyOrPath(<MaterialsPage />, '/content') },
-          { path: 'print', element: legacyOrPath(<PrintPage />, '/printing') },
-          { path: 'people', element: legacyOrPath(<PeoplePage />, '/students') },
-          { path: 'people/students/:personId', element: legacyOrPath(<PeoplePage />, '/students') },
-          { path: 'people/parents/:personId', element: legacyOrPath(<PeoplePage />, '/parents') },
-          { path: 'operations', element: legacyOrToday(<OperationsPage />) },
-          { path: 'work', element: legacyOrToday(<WorkPage />) },
-          { path: 'tasks', element: legacyOrToday(<TasksPage />) },
-          { path: 'surveys', element: legacyOrToday(<SurveysPage />) },
-          { path: 'surveys/:surveyId', element: legacyOrToday(<SurveysPage />) },
-          { path: 'messages', element: legacyOrToday(<MessagesPage />) },
-          { path: 'mgmt', element: legacyOrPath(<Navigate to="/messages?scope=management" replace />, '/today') },
-          { path: 'cards', element: legacyOrPath(<Navigate to="/cohorts" replace />, '/today') },
+          ...(remote
+            ? [
+                { path: 'students/*', element: page(<StaffStudentsWorkspace />) },
+                { path: 'cohorts/*', element: page(<StaffGroupsWorkspace />) },
+                { path: 'academic', element: <Navigate to="/academics" replace /> },
+                { path: 'materials', element: <Navigate to="/content" replace /> },
+                { path: 'print', element: <Navigate to="/printing" replace /> },
+                { path: 'people/*', element: <Navigate to="/students" replace /> },
+                { path: 'work', element: <Navigate to="/tasks" replace /> },
+                { path: 'surveys/*', element: <Navigate to="/forms" replace /> },
+                { path: 'mgmt', element: <Navigate to="/messages" replace /> },
+              ]
+            : [
+                { path: 'cohorts', element: page(<CohortsPage />) },
+                { path: 'cohorts/:cohortId', element: page(<CohortsPage />) },
+                { path: 'finance', element: page(<FinancePage />) },
+                { path: 'ai', element: page(<AiPage />) },
+                { path: 'notifications', element: page(<TodayPage />) },
+                { path: 'academic', element: page(<AcademicPage />) },
+                { path: 'materials', element: page(<MaterialsPage />) },
+                { path: 'print', element: page(<PrintPage />) },
+                { path: 'people', element: page(<PeoplePage />) },
+                { path: 'people/students/:personId', element: page(<PeoplePage />) },
+                { path: 'people/parents/:personId', element: page(<PeoplePage />) },
+                { path: 'operations', element: page(<OperationsPage />) },
+                { path: 'work', element: page(<WorkPage />) },
+                { path: 'tasks', element: page(<TasksPage />) },
+                { path: 'surveys', element: page(<SurveysPage />) },
+                { path: 'surveys/:surveyId', element: page(<SurveysPage />) },
+                { path: 'messages', element: page(<MessagesPage />) },
+                {
+                  path: 'mgmt',
+                  element: <Navigate to="/messages?scope=management" replace />,
+                },
+                { path: 'cards', element: <Navigate to="/cohorts" replace /> },
+              ]),
           { path: 'settings', element: page(<SettingsPage />) },
-          { path: '*', element: <Navigate to="/today" replace /> },
+          {
+            path: 'account/*',
+            element: remote
+              ? page(<StaffAccountWorkspace />)
+              : <Navigate to="/settings" replace />,
+          },
+          {
+            path: '*',
+            element: remote ? resourcePage() : <Navigate to="/today" replace />,
+          },
         ],
       },
     ],

@@ -6,9 +6,9 @@ import { PasswordChangePage } from './PasswordChangePage.jsx';
 
 vi.mock('@/data/http/authToken.js', () => ({
   changePassword: vi.fn(),
-  getToken: () => 'temporary-session',
+  getSessionSnapshot: () => ({ status: 'password-change' }),
   logout: vi.fn(),
-  requiresPasswordChange: () => true,
+  subscribeToSession: () => () => {},
 }));
 
 vi.mock('@/hooks/useT.js', () => ({

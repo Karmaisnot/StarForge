@@ -277,6 +277,7 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader
+        eyebrow={t('settings.profile')}
         title={t('settings.title')}
         subtitle={t('settings.subtitle')}
         right={

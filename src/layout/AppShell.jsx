@@ -1,20 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useIsFetching, useIsMutating, useQuery } from '@tanstack/react-query';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useServices } from '@/hooks/useServices.js';
 import { useTeacher } from '@/hooks/data.js';
 import { useT } from '@/hooks/useT.js';
 import { accessForPath, navItemForPath, profileCanOpen } from './navConfig.js';
-import { canAccess, isStaffProfile } from '@/domain/access.js';
-import { DATA_SOURCE } from '@/data/http/apiConfig.js';
+import { isStaffProfile } from '@/domain/access.js';
 import { Sidebar } from './Sidebar.jsx';
 import { TopBar } from './TopBar.jsx';
-import { MobileTabs } from './MobileTabs.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
 import { StaffOnlyPage } from '@/app/StaffOnlyPage.jsx';
 import { RouteAccessPage } from '@/app/StaffOnlyPage.jsx';
 import { PageError, PageLoading } from './PageState.jsx';
 import styles from './AppShell.module.css';
+import '@/ceo/styles/shell-v2.css';
+import '@/styles/staff-shell.css';
+
+function NetworkProgress() {
+  const activeRequests = useIsFetching() + useIsMutating();
+  return (
+    <div className={`ad-network-progress${activeRequests > 0 ? ' is-active' : ''}`} aria-hidden="true">
+      <i />
+    </div>
+  );
+}
 
 /** Responsive application chrome: sidebar / topbar / mobile tabs around the routed page. */
 export function AppShell() {
@@ -22,7 +31,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { pathname } = useLocation();
   const { t, locale, setLocale } = useT();
-  const { ai, navigation } = useServices();
+  const { navigation } = useServices();
 
   const openDrawer = useCallback(() => setDrawer(true), []);
   const closeDrawer = useCallback(() => setDrawer(false), []);
@@ -65,14 +74,12 @@ export function AppShell() {
     queryFn: () => navigation.getBadges(),
     enabled: Boolean(teacher),
   });
-  const { data: aiUsage } = useQuery({
-    queryKey: ['ai', 'usage', teacher?.id],
-    queryFn: () => ai.getUsage(),
-    enabled: DATA_SOURCE === 'remote' ? canAccess(teacher, 'ai_app') : teacher?.roleKey === 'teacher',
-  });
-
   const current = navItemForPath(pathname);
-  const title = current ? t(`nav.${current.id}`) : 'StarForge';
+  const titleKey = current ? `nav.${current.id}` : '';
+  const translatedTitle = current ? t(titleKey) : '';
+  const title = current
+    ? (translatedTitle === titleKey ? current.label : translatedTitle)
+    : 'StarForge';
 
   // Fail closed while the authenticated identity is unknown. Otherwise a
   // transient /users/me/ failure would briefly expose every role-gated route.
@@ -93,17 +100,19 @@ export function AppShell() {
   }
 
   return (
-    <div className={styles.root}>
+    <div className="ad-root ad-shell-v2" data-role="staff" data-navigation="sidebar">
+      <NetworkProgress />
+      <a className="ad-skip-link" href="#staff-workspace">
+        Skip to main content
+      </a>
       <Sidebar
         teacher={teacher}
         badges={badges ?? {}}
-        aiUsage={aiUsage}
         open={drawer}
         onClose={closeDrawer}
       />
-      {drawer && <div className={styles.scrim} aria-hidden="true" onClick={closeDrawer} />}
 
-      <div className={styles.col}>
+      <div className="ad-col" aria-hidden={drawer ? 'true' : undefined} inert={drawer ? '' : undefined}>
         <TopBar
           title={title}
           teacher={teacher}
@@ -111,12 +120,23 @@ export function AppShell() {
           onOpenDrawer={openDrawer}
           onOpenSearch={() => setPaletteOpen(true)}
         />
-        <main className={styles.main}>
+        <main id="staff-workspace" className="ad-main" tabIndex="-1">
+          {teacher.readOnlySession ? (
+            <div className="ad-session-policy-note" role="status" aria-label="View-only session">
+              <span className="ad-session-policy-copy">
+                <strong>View-only session</strong>
+                <small>Your permitted staff data remains available while changes stay disabled.</small>
+              </span>
+              <span className="ad-session-policy-state">Protected</span>
+            </div>
+          ) : null}
           <Outlet />
         </main>
       </div>
 
-      <MobileTabs badges={badges ?? {}} profile={teacher} />
+      {drawer ? (
+        <button type="button" className="ad-scrim" onClick={closeDrawer} aria-label="Close navigation" />
+      ) : null}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} profile={teacher} />
     </div>
   );

@@ -1,47 +1,36 @@
-// Central API configuration. Staff production traffic must go directly to the
-// deployed StarForge API -- never to a localhost development server.
+// Browser API configuration. Production traffic is deliberately same-origin:
+// the public web host proxies /api to the tenant backend, so HttpOnly session
+// cookies work without CORS exceptions or exposing an API origin in the bundle.
 
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
 
-// Production is remote by default. Local mode is opt-in and set solely by
-// scripts/dev-local.mjs for an isolated developer stack.
 export const DATA_SOURCE = ['mock', 'local', 'remote'].includes(rawSource)
   ? rawSource
   : 'remote';
 
-export const API_PREFIX = DATA_SOURCE === 'remote' ? '/api/v1' : '/api';
+export const API_PREFIX = DATA_SOURCE === 'local' ? '/api' : '/api/v1';
 export const API_MODE = DATA_SOURCE !== 'mock';
 export const LOCAL_API_MODE = DATA_SOURCE === 'local';
 
-const PRODUCTION_API_ORIGIN = 'https://starforge.78.111.91.113.nip.io';
-const rawBaseUrl =
-  DATA_SOURCE === 'remote'
-    ? import.meta.env?.VITE_API_BASE_URL?.trim() || PRODUCTION_API_ORIGIN
-    : '';
-
-const baseUrl = rawBaseUrl.replace(/\/+$/, '');
-const baseAlreadyVersioned = baseUrl.endsWith(API_PREFIX);
-
 function normalizePath(path) {
-  const value = String(path ?? '');
-  if (value.startsWith(`${API_PREFIX}/`) || value === API_PREFIX) return value;
+  const value = String(path ?? '').trim();
+  if (!value || value.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(value)) {
+    throw new TypeError('API paths must be non-empty same-origin paths.');
+  }
+
+  if (value === API_PREFIX || value.startsWith(`${API_PREFIX}/`)) return value;
   return `${API_PREFIX}/${value.replace(/^\/+/, '')}`;
 }
 
-/** Resolve an API path against the configured origin and selected API prefix. */
+/** Resolve a repository path to the app's same-origin API namespace. */
 export function apiUrl(path) {
-  const normalized = normalizePath(path);
-  // Accept either a tenant origin (`https://tenant.example`) or a fully
-  // versioned base (`https://tenant.example/api/v1`) in VITE_API_BASE_URL.
-  return `${baseUrl}${baseAlreadyVersioned ? normalized.slice(API_PREFIX.length) : normalized}`;
+  return normalizePath(path);
 }
 
-/** True only when the application is intentionally configured for API data. */
 export function isApiMode() {
   return API_MODE;
 }
 
-/** True when requests are served by the Fastify API included in this project. */
 export function isLocalApiMode() {
   return LOCAL_API_MODE;
 }

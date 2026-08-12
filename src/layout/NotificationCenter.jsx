@@ -19,7 +19,7 @@ function matches(item, filter) {
   return false;
 }
 
-export function NotificationCenter() {
+export function NotificationCenter({ shell = false }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -101,7 +101,7 @@ export function NotificationCenter() {
     <div className={styles.root}>
       <button
         ref={buttonRef}
-        className={styles.trigger}
+        className={`${styles.trigger}${shell ? ' ad-top-ic' : ''}`}
         title={t('nav.notifications')}
         aria-label={`${t('nav.notifications')}: ${unread} ${t('notifications.unread')}`}
         aria-expanded={open}

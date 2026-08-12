@@ -1,0 +1,1468 @@
+{
+  "source": "starforge_edu/openapi.yaml",
+  "generatedAt": "2026-08-12T17:57:15.317Z",
+  "paths": {
+    "/api/v1/academics/exam-types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/academics/exam-types/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/academics/exams/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/academics/exams/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/academics/exams/{id}/correct/": [
+      "POST"
+    ],
+    "/api/v1/academics/exams/{id}/history/": [
+      "GET"
+    ],
+    "/api/v1/academics/exams/{id}/publish/": [
+      "POST"
+    ],
+    "/api/v1/academics/exams/{id}/readiness/": [
+      "GET"
+    ],
+    "/api/v1/academics/exams/{id}/results/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/academics/exams/{id}/results/import-csv/": [
+      "POST"
+    ],
+    "/api/v1/academics/grades/": [
+      "GET"
+    ],
+    "/api/v1/academics/grades/{id}/": [
+      "GET"
+    ],
+    "/api/v1/academics/grades/recompute/": [
+      "POST"
+    ],
+    "/api/v1/academics/honor-roll/": [
+      "GET"
+    ],
+    "/api/v1/academics/subjects/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/academics/subjects/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/academics/transcripts/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/academics/transcripts/{id}/": [
+      "GET"
+    ],
+    "/api/v1/academics/warnings/": [
+      "GET"
+    ],
+    "/api/v1/access/overrides/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/access/overrides/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/access/permissions/": [
+      "GET"
+    ],
+    "/api/v1/access/roles/": [
+      "GET"
+    ],
+    "/api/v1/access/types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/access/types/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/access/types/{id}/assignments/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/access/types/{id}/permissions/": [
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/access/types/assignments/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/access/types/assignments/{id}/": [
+      "DELETE"
+    ],
+    "/api/v1/access/types/effective-permissions/": [
+      "GET"
+    ],
+    "/api/v1/achievements/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/achievements/{id}/": [
+      "GET"
+    ],
+    "/api/v1/achievements/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/achievements/{id}/grant/": [
+      "POST"
+    ],
+    "/api/v1/achievements/{id}/grants/": [
+      "GET"
+    ],
+    "/api/v1/achievements/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/achievements/mine/": [
+      "GET"
+    ],
+    "/api/v1/ai/budget/": [
+      "GET",
+      "HEAD",
+      "PATCH"
+    ],
+    "/api/v1/ai/exam-generation/": [
+      "POST"
+    ],
+    "/api/v1/ai/requests/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/ai/requests/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/ai/usage-report/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/approvals/ledger/": [
+      "GET"
+    ],
+    "/api/v1/approvals/ledger/{id}/": [
+      "GET"
+    ],
+    "/api/v1/approvals/requests/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/approvals/requests/{id}/": [
+      "GET"
+    ],
+    "/api/v1/approvals/requests/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/approvals/requests/{id}/cancel/": [
+      "POST"
+    ],
+    "/api/v1/approvals/requests/{id}/disburse/": [
+      "POST"
+    ],
+    "/api/v1/approvals/requests/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/assignments/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/assignments/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/assignments/{id}/close/": [
+      "POST"
+    ],
+    "/api/v1/assignments/{id}/publish/": [
+      "POST"
+    ],
+    "/api/v1/assignments/{id}/submissions/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/assignments/submissions/": [
+      "GET"
+    ],
+    "/api/v1/assignments/submissions/{id}/": [
+      "GET"
+    ],
+    "/api/v1/assignments/submissions/{id}/grade/": [
+      "POST"
+    ],
+    "/api/v1/assignments/submissions/{id}/plagiarism/": [
+      "POST"
+    ],
+    "/api/v1/assignments/submissions/{id}/request-ai-feedback/": [
+      "POST"
+    ],
+    "/api/v1/assignments/submissions/{id}/return/": [
+      "POST"
+    ],
+    "/api/v1/assignments/upload-url/": [
+      "POST"
+    ],
+    "/api/v1/attendance/cohorts/{id}/dashboard/": [
+      "GET"
+    ],
+    "/api/v1/attendance/export/": [
+      "GET"
+    ],
+    "/api/v1/attendance/lessons/{id}/mark/": [
+      "POST"
+    ],
+    "/api/v1/attendance/records/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/attendance/records/{id}/": [
+      "GET"
+    ],
+    "/api/v1/attendance/summary/": [
+      "GET"
+    ],
+    "/api/v1/audit/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/audit/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/audit/export/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/auth/logout-all/": [
+      "POST"
+    ],
+    "/api/v1/auth/logout/": [
+      "POST"
+    ],
+    "/api/v1/auth/password/change/": [
+      "POST"
+    ],
+    "/api/v1/auth/password/reset/confirm/": [
+      "POST"
+    ],
+    "/api/v1/auth/password/reset/request/": [
+      "POST"
+    ],
+    "/api/v1/auth/role-login/": [
+      "POST"
+    ],
+    "/api/v1/auth/session/": [
+      "GET"
+    ],
+    "/api/v1/campaigns/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/campaigns/{id}/": [
+      "GET"
+    ],
+    "/api/v1/campaigns/{id}/recipients/": [
+      "GET"
+    ],
+    "/api/v1/campaigns/{id}/send/": [
+      "POST"
+    ],
+    "/api/v1/campaigns/do-not-contact/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/campaigns/do-not-contact/{id}/": [
+      "DELETE",
+      "GET"
+    ],
+    "/api/v1/campaigns/templates/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/campaigns/templates/{id}/": [
+      "GET",
+      "PATCH"
+    ],
+    "/api/v1/campaigns/templates/{id}/generate/": [
+      "POST"
+    ],
+    "/api/v1/cards/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cards/{id}/": [
+      "GET"
+    ],
+    "/api/v1/cards/{id}/revoke/": [
+      "POST"
+    ],
+    "/api/v1/cards/scan/": [
+      "POST"
+    ],
+    "/api/v1/cards/scans/": [
+      "GET"
+    ],
+    "/api/v1/cards/types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cards/types/{id}/": [
+      "GET",
+      "PATCH"
+    ],
+    "/api/v1/cards/wallets/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/cards/wallets/{id}/refund/": [
+      "POST"
+    ],
+    "/api/v1/cards/wallets/{id}/spend/": [
+      "POST"
+    ],
+    "/api/v1/cards/wallets/{id}/topup/": [
+      "POST"
+    ],
+    "/api/v1/cards/wallets/me/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/cohorts/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cohorts/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/cohorts/{id}/cycle-progress/": [
+      "GET"
+    ],
+    "/api/v1/cohorts/{id}/enroll/": [
+      "POST"
+    ],
+    "/api/v1/cohorts/{id}/members/": [
+      "GET"
+    ],
+    "/api/v1/cohorts/{id}/move-student/": [
+      "POST"
+    ],
+    "/api/v1/cohorts/{id}/remove-student/": [
+      "POST"
+    ],
+    "/api/v1/cohorts/{id}/teachers/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cohorts/{id}/teachers/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/cohorts/{id}/teaching-progress/": [
+      "PATCH"
+    ],
+    "/api/v1/cohorts/{id}/unarchive/": [
+      "POST"
+    ],
+    "/api/v1/cohorts/teacher-types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cohorts/teacher-types/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/content/courses/": [
+      "GET"
+    ],
+    "/api/v1/content/courses/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/files/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/content/files/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/files/{id}/approve-manager/": [
+      "POST"
+    ],
+    "/api/v1/content/files/{id}/approve-teacher/": [
+      "POST"
+    ],
+    "/api/v1/content/files/{id}/confirm/": [
+      "POST"
+    ],
+    "/api/v1/content/files/{id}/download-url/": [
+      "GET"
+    ],
+    "/api/v1/content/files/{id}/new-version/": [
+      "POST"
+    ],
+    "/api/v1/content/files/{id}/track-view/": [
+      "POST"
+    ],
+    "/api/v1/content/folders/": [
+      "GET"
+    ],
+    "/api/v1/content/folders/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/lessons/": [
+      "GET"
+    ],
+    "/api/v1/content/lessons/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/libraries/": [
+      "GET"
+    ],
+    "/api/v1/content/libraries/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/materials/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/content/materials/{id}/": [
+      "GET",
+      "PATCH"
+    ],
+    "/api/v1/content/materials/{id}/generate/": [
+      "POST"
+    ],
+    "/api/v1/content/materials/{id}/publish/": [
+      "POST"
+    ],
+    "/api/v1/content/modules/": [
+      "GET"
+    ],
+    "/api/v1/content/modules/{id}/": [
+      "GET"
+    ],
+    "/api/v1/content/upload-url/": [
+      "POST"
+    ],
+    "/api/v1/cover/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/cover/{id}/": [
+      "GET"
+    ],
+    "/api/v1/cover/{id}/assign/": [
+      "POST"
+    ],
+    "/api/v1/cover/{id}/cancel/": [
+      "POST"
+    ],
+    "/api/v1/cover/{id}/claim/": [
+      "POST"
+    ],
+    "/api/v1/cover/{id}/open-pool/": [
+      "POST"
+    ],
+    "/api/v1/cover/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/cover/pool/": [
+      "GET"
+    ],
+    "/api/v1/crm/campaigns/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/duplicates/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/crm/duplicates/{id}/dismiss/": [
+      "POST"
+    ],
+    "/api/v1/crm/duplicates/{id}/merge/": [
+      "POST"
+    ],
+    "/api/v1/crm/follow-ups/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/crm/follow-ups/{id}/cancel/": [
+      "POST"
+    ],
+    "/api/v1/crm/follow-ups/{id}/complete/": [
+      "POST"
+    ],
+    "/api/v1/crm/funnel/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/crm/leads/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/crm/leads/{id}/attributions/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/detect-duplicates/": [
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/follow-ups/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/owner/": [
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/stage-history/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/crm/leads/{id}/touches/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/leads/{id}/transition/": [
+      "POST"
+    ],
+    "/api/v1/crm/sources/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/stages/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/crm/stages/{id}/": [
+      "GET",
+      "HEAD",
+      "PATCH"
+    ],
+    "/api/v1/finance/cashier-shifts/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/cashier-shifts/{id}/": [
+      "GET"
+    ],
+    "/api/v1/finance/cashier-shifts/{id}/close/": [
+      "POST"
+    ],
+    "/api/v1/finance/cashier-shifts/{id}/report/": [
+      "GET"
+    ],
+    "/api/v1/finance/cashier-shifts/me/": [
+      "GET"
+    ],
+    "/api/v1/finance/cashier-shifts/open/": [
+      "POST"
+    ],
+    "/api/v1/finance/discounts/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/discounts/{id}/": [
+      "GET"
+    ],
+    "/api/v1/finance/discounts/{id}/deactivate/": [
+      "POST"
+    ],
+    "/api/v1/finance/expenses/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/expenses/{id}/": [
+      "GET"
+    ],
+    "/api/v1/finance/expenses/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/finance/expenses/{id}/pay/": [
+      "POST"
+    ],
+    "/api/v1/finance/expenses/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/finance/fee-schedules/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/fee-schedules/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/finance/invoices/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/invoices/{id}/": [
+      "GET"
+    ],
+    "/api/v1/finance/invoices/{id}/payment-plan/": [
+      "POST"
+    ],
+    "/api/v1/finance/invoices/{id}/void/": [
+      "POST"
+    ],
+    "/api/v1/finance/outstanding/": [
+      "GET"
+    ],
+    "/api/v1/finance/payment-methods/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/finance/payment-methods/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/finance/refunds/": [
+      "GET"
+    ],
+    "/api/v1/finance/refunds/{id}/": [
+      "GET"
+    ],
+    "/api/v1/finance/refunds/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/finance/statements/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/finance/students/{id}/statement/": [
+      "POST"
+    ],
+    "/api/v1/forms/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/forms/{id}/": [
+      "DELETE",
+      "GET",
+      "HEAD",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/forms/{id}/analyze/": [
+      "POST"
+    ],
+    "/api/v1/forms/{id}/close/": [
+      "POST"
+    ],
+    "/api/v1/forms/{id}/fields/": [
+      "POST"
+    ],
+    "/api/v1/forms/{id}/publish/": [
+      "POST"
+    ],
+    "/api/v1/forms/{id}/responses/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/forms/{id}/submit/": [
+      "POST"
+    ],
+    "/api/v1/forms/{id}/summary/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/intelligence/branches/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/executive-summary/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/intelligence/families/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/journey/{id}/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/risk/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/risk/{id}/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/rules/": [
+      "GET"
+    ],
+    "/api/v1/intelligence/teachers/": [
+      "GET"
+    ],
+    "/api/v1/loans/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/loans/{id}/": [
+      "GET"
+    ],
+    "/api/v1/loans/{id}/repay/": [
+      "POST"
+    ],
+    "/api/v1/loans/{id}/repayments/": [
+      "GET"
+    ],
+    "/api/v1/meetings/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/meetings/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/meetings/{id}/cancel/": [
+      "POST"
+    ],
+    "/api/v1/meetings/{id}/respond/": [
+      "POST"
+    ],
+    "/api/v1/meetings/upcoming/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/messaging/attachments/upload-url/": [
+      "POST"
+    ],
+    "/api/v1/messaging/contacts/": [
+      "GET"
+    ],
+    "/api/v1/messaging/threads/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/messaging/threads/{id}/": [
+      "GET"
+    ],
+    "/api/v1/messaging/threads/{id}/attachments/download/": [
+      "GET"
+    ],
+    "/api/v1/messaging/threads/{id}/events/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/messaging/threads/{id}/messages/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/messaging/threads/{id}/preferences/": [
+      "PATCH"
+    ],
+    "/api/v1/messaging/threads/{id}/read/": [
+      "POST"
+    ],
+    "/api/v1/notifications/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/notifications/{id}/read/": [
+      "POST"
+    ],
+    "/api/v1/notifications/announcements/": [
+      "POST"
+    ],
+    "/api/v1/notifications/preferences/": [
+      "GET",
+      "PUT"
+    ],
+    "/api/v1/notifications/read-all/": [
+      "POST"
+    ],
+    "/api/v1/notifications/templates/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/notifications/templates/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/notifications/unread-count/": [
+      "GET"
+    ],
+    "/api/v1/org/app-status/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/org/branches/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/branches/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/branches/{id}/holidays/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/branches/{id}/holidays/{id}/": [
+      "DELETE"
+    ],
+    "/api/v1/org/branches/{id}/working-hours/": [
+      "PUT"
+    ],
+    "/api/v1/org/departments/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/departments/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/rooms/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/rooms/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/settings/": [
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/staff/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/staff/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/staff/{id}/credentials/": [
+      "POST"
+    ],
+    "/api/v1/org/system/apps/": [
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/org/transfers/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/org/transfers/{id}/": [
+      "GET"
+    ],
+    "/api/v1/parents/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/parents/{id}/": [
+      "GET"
+    ],
+    "/api/v1/parents/{id}/credentials/": [
+      "POST"
+    ],
+    "/api/v1/parents/{id}/students/": [
+      "GET"
+    ],
+    "/api/v1/parents/guardians/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/parents/guardians/{id}/": [
+      "GET"
+    ],
+    "/api/v1/parents/me/children/": [
+      "GET"
+    ],
+    "/api/v1/parents/me/children/{id}/report/": [
+      "GET"
+    ],
+    "/api/v1/parents/pickups/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/parents/pickups/{id}/": [
+      "GET"
+    ],
+    "/api/v1/payments/": [
+      "GET"
+    ],
+    "/api/v1/payments/{id}/": [
+      "GET"
+    ],
+    "/api/v1/payments/{id}/allocate/": [
+      "POST"
+    ],
+    "/api/v1/payments/{id}/receipt/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/payments/{id}/refund/": [
+      "POST"
+    ],
+    "/api/v1/payments/cash/": [
+      "POST"
+    ],
+    "/api/v1/payments/checkout/": [
+      "POST"
+    ],
+    "/api/v1/payments/provider-configs/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/payments/provider-configs/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/payments/reconciliation/": [
+      "GET"
+    ],
+    "/api/v1/payroll/adjustments/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/payroll/adjustments/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/adjustments/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/payroll/adjustments/{id}/events/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/adjustments/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/payroll/disbursements/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/payslips/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/payslips/mine/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/payslips/mine/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/events/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/{id}/exports/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/exports/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/{id}/lines/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/{id}/preview/": [
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/reconcile/": [
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/reconciliations/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/periods/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/run/": [
+      "POST"
+    ],
+    "/api/v1/payroll/periods/{id}/totals/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/reconciliations/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/payroll/reconciliations/{id}/reverse/": [
+      "POST"
+    ],
+    "/api/v1/placement/attempts/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/placement/attempts/{id}/": [
+      "GET"
+    ],
+    "/api/v1/placement/attempts/{id}/mark-writing-manual/": [
+      "POST"
+    ],
+    "/api/v1/placement/attempts/{id}/mark-writing/": [
+      "POST"
+    ],
+    "/api/v1/placement/attempts/{id}/submit/": [
+      "POST"
+    ],
+    "/api/v1/placement/attempts/{id}/suggestions/": [
+      "GET"
+    ],
+    "/api/v1/placement/proposals/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/placement/proposals/{id}/": [
+      "GET"
+    ],
+    "/api/v1/placement/proposals/{id}/accept/": [
+      "POST"
+    ],
+    "/api/v1/placement/proposals/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/placement/tests/{id}/approve/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/generate/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/questions/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/questions/{id}/remove/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/reject/": [
+      "POST"
+    ],
+    "/api/v1/placement/tests/{id}/submit/": [
+      "POST"
+    ],
+    "/api/v1/printing/agent/claim/": [
+      "POST"
+    ],
+    "/api/v1/printing/agent/jobs/{id}/heartbeat/": [
+      "POST"
+    ],
+    "/api/v1/printing/agent/jobs/{id}/status/": [
+      "POST"
+    ],
+    "/api/v1/printing/agents/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/printing/agents/{id}/": [
+      "GET"
+    ],
+    "/api/v1/printing/agents/{id}/revoke/": [
+      "POST"
+    ],
+    "/api/v1/printing/jobs/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/printing/jobs/{id}/": [
+      "GET"
+    ],
+    "/api/v1/printing/jobs/{id}/reconcile/": [
+      "POST"
+    ],
+    "/api/v1/printing/jobs/{id}/reconciliations/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/printing/printers/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/printing/printers/{id}/": [
+      "GET",
+      "PATCH"
+    ],
+    "/api/v1/printing/upload-url/": [
+      "POST"
+    ],
+    "/api/v1/procurement/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/procurement/{id}/": [
+      "GET"
+    ],
+    "/api/v1/reports/": [
+      "GET"
+    ],
+    "/api/v1/reports/{id}/": [
+      "GET"
+    ],
+    "/api/v1/reports/runs/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/reports/runs/{id}/": [
+      "GET"
+    ],
+    "/api/v1/reports/schedules/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/reports/schedules/{id}/": [
+      "GET",
+      "PATCH"
+    ],
+    "/api/v1/rewards/grants/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/rewards/grants/{id}/": [
+      "GET"
+    ],
+    "/api/v1/rewards/grants/mine/": [
+      "GET"
+    ],
+    "/api/v1/rewards/types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/rewards/types/{id}/": [
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/rulebook/penalties/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/rulebook/penalties/{id}/": [
+      "GET"
+    ],
+    "/api/v1/rulebook/penalties/{id}/waive/": [
+      "POST"
+    ],
+    "/api/v1/rulebook/penalties/staff/": [
+      "POST"
+    ],
+    "/api/v1/rulebook/rules/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/rulebook/rules/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/rulebook/rules/{id}/acknowledge/": [
+      "POST"
+    ],
+    "/api/v1/rulebook/rules/mine/": [
+      "GET"
+    ],
+    "/api/v1/rulebook/rules/pending/": [
+      "GET"
+    ],
+    "/api/v1/sales/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/sales/{id}/": [
+      "GET"
+    ],
+    "/api/v1/sales/{id}/refund/": [
+      "POST"
+    ],
+    "/api/v1/schedule/ical-url/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/schedule/ical/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/schedule/lesson-types/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/schedule/lesson-types/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/schedule/lessons/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/schedule/lessons/{id}/": [
+      "GET"
+    ],
+    "/api/v1/schedule/lessons/{id}/cancel/": [
+      "POST"
+    ],
+    "/api/v1/schedule/lessons/{id}/move/": [
+      "POST"
+    ],
+    "/api/v1/schedule/rules/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/schedule/rules/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/schedule/rules/{id}/bulk-reschedule/": [
+      "POST"
+    ],
+    "/api/v1/schedule/terms/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/schedule/terms/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/schedule/timeslots/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/schedule/timeslots/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/students/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/students/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/students/{id}/block/": [
+      "POST"
+    ],
+    "/api/v1/students/{id}/credentials/": [
+      "POST"
+    ],
+    "/api/v1/students/{id}/events/": [
+      "GET"
+    ],
+    "/api/v1/students/{id}/leadership-profile/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/students/{id}/transition/": [
+      "POST"
+    ],
+    "/api/v1/students/{id}/unblock/": [
+      "POST"
+    ],
+    "/api/v1/students/birthdays/": [
+      "GET"
+    ],
+    "/api/v1/students/comparison/": [
+      "GET"
+    ],
+    "/api/v1/students/enrollment-reasons/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/students/enrollment-reasons/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/students/import/": [
+      "POST"
+    ],
+    "/api/v1/students/me/dashboard/": [
+      "GET"
+    ],
+    "/api/v1/students/me/report/": [
+      "GET"
+    ],
+    "/api/v1/students/stats/": [
+      "GET"
+    ],
+    "/api/v1/tasks/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/tasks/{id}/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/tasks/{id}/assign/": [
+      "POST"
+    ],
+    "/api/v1/tasks/{id}/transition/": [
+      "POST"
+    ],
+    "/api/v1/tasks/auto-assign/": [
+      "POST"
+    ],
+    "/api/v1/tasks/grades/": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "/api/v1/tasks/grades/{id}/": [
+      "DELETE",
+      "GET",
+      "HEAD",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/tasks/mine/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/teachers/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/teachers/{id}/": [
+      "DELETE",
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "/api/v1/teachers/{id}/credentials/": [
+      "POST"
+    ],
+    "/api/v1/teachers/{id}/payout-policy/": [
+      "GET",
+      "HEAD",
+      "POST",
+      "PUT"
+    ],
+    "/api/v1/teachers/{id}/prepare-salary/": [
+      "POST"
+    ],
+    "/api/v1/teachers/dashboard/": [
+      "GET"
+    ],
+    "/api/v1/users/": [
+      "GET"
+    ],
+    "/api/v1/users/{id}/": [
+      "GET"
+    ],
+    "/api/v1/users/devices/": [
+      "GET",
+      "POST"
+    ],
+    "/api/v1/users/devices/{id}/": [
+      "DELETE"
+    ],
+    "/api/v1/users/me/": [
+      "GET",
+      "HEAD",
+      "PATCH"
+    ],
+    "/api/v1/users/sessions/": [
+      "GET",
+      "HEAD"
+    ],
+    "/api/v1/users/sessions/{id}/": [
+      "DELETE"
+    ]
+  }
+}

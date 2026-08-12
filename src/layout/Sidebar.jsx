@@ -1,49 +1,90 @@
-import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Avatar, Icon, StarMark, AiBadge } from '@/ui';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Icon } from '@/ui';
+import { SfAvatar, SfStar } from '@/ceo/components/primitives.jsx';
+import { logout } from '@/data/http/authToken.js';
+import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 import { useT } from '@/hooks/useT.js';
 import { PRIMARY_NAV, SECONDARY_NAV, visibleNav } from './navConfig.js';
-import { NavItem } from './NavItem.jsx';
-import styles from './AppShell.module.css';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/**
- * @param {{ teacher: object|null, badges: object, aiUsage: object|null,
- *           open: boolean, onClose: Function }} props
- */
-export function Sidebar({ teacher, badges = {}, aiUsage, open, onClose }) {
+function activePath(pathname, path) {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function navLabel(item, t) {
+  const translated = t(`nav.${item.id}`);
+  return translated === `nav.${item.id}` ? item.label : translated;
+}
+
+function scopeLabel(teacher) {
+  const names = [
+    ...new Set(
+      (teacher?.roleMemberships ?? [])
+        .map((membership) => membership?.branch_name)
+        .filter(Boolean),
+    ),
+  ];
+  if (names.length > 1) return `${names.length} assigned branches`;
+  return names[0] || teacher?.branch || 'Assigned staff scope';
+}
+
+function RailGroup({ title, items, pathname, badges, onNavigate, t }) {
+  if (!items.length) return null;
+  return (
+    <section className="ad-rail-group">
+      <h2>{title}</h2>
+      {items.map((item) => {
+        const selected = activePath(pathname, item.path);
+        const badge = Number(badges[item.badge] ?? 0);
+        return (
+          <Link
+            key={item.id}
+            className={`ad-rail-link${selected ? ' is-current' : ''}`}
+            to={item.path}
+            onClick={onNavigate}
+            aria-current={selected ? 'page' : undefined}
+          >
+            <span>
+              <Icon name={item.icon} size={16} />
+            </span>
+            <strong>{navLabel(item, t)}</strong>
+            {selected ? <i aria-hidden="true" /> : badge > 0 ? <em>{badge > 99 ? '99+' : badge}</em> : null}
+          </Link>
+        );
+      })}
+    </section>
+  );
+}
+
+/** CEO-shell navigation rail adapted to the signed-in staff permission graph. */
+export function Sidebar({ teacher, badges = {}, open, onClose }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { t } = useT();
-  const pct = aiUsage?.percent ?? 0;
   const drawerRef = useRef(null);
   const closeRef = useRef(null);
-  const closeHandlerRef = useRef(onClose);
-  const previouslyFocusedRef = useRef(null);
-  closeHandlerRef.current = onClose;
+  const [signingOut, setSigningOut] = useState(false);
+  const primary = visibleNav(PRIMARY_NAV, teacher);
+  const secondary = visibleNav(SECONDARY_NAV, teacher);
 
-  // The mobile sidebar is a modal drawer. Keep keyboard focus inside it,
-  // support Escape, and return focus to the opener after it closes.
   useEffect(() => {
     if (!open) return undefined;
     const drawer = drawerRef.current;
-    previouslyFocusedRef.current = document.activeElement;
-    const focusables = () => (drawer ? [...drawer.querySelectorAll(FOCUSABLE)] : []);
-    const frame = requestAnimationFrame(() => closeRef.current?.focus());
+    const previous = document.activeElement;
+    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
+
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        closeHandlerRef.current();
+        onClose();
         return;
       }
       if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (!items.length) {
-        event.preventDefault();
-        drawer?.focus();
-        return;
-      }
+      const items = drawer ? [...drawer.querySelectorAll(FOCUSABLE)] : [];
+      if (!items.length) return;
       const first = items[0];
       const last = items[items.length - 1];
       if (event.shiftKey && document.activeElement === first) {
@@ -54,105 +95,121 @@ export function Sidebar({ teacher, badges = {}, aiUsage, open, onClose }) {
         first.focus();
       }
     };
-    document.addEventListener('keydown', onKeyDown);
+
+    document.addEventListener('keydown', onKeyDown, true);
     return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener('keydown', onKeyDown);
-      const previouslyFocused = previouslyFocusedRef.current;
-      if (previouslyFocused instanceof HTMLElement && document.contains(previouslyFocused)) {
-        previouslyFocused.focus();
-      }
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown, true);
+      if (previous instanceof HTMLElement && document.contains(previous)) previous.focus();
     };
-  }, [open]);
+  }, [onClose, open]);
+
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await logout();
+    } catch {
+      // The local session is still abandoned when the server is unreachable.
+    } finally {
+      navigate('/login', { replace: true });
+      onClose();
+      setSigningOut(false);
+    }
+  };
 
   return (
     <aside
       ref={drawerRef}
       id="main-navigation"
-      className={`${styles.side} ${open ? styles.open : ''}`}
+      className={`ad-sidebar-rail${open ? ' is-open' : ''}`}
       role={open ? 'dialog' : undefined}
-      aria-modal={open ? true : undefined}
-      aria-label={open ? t('shell.menu') : undefined}
+      aria-modal={open ? 'true' : undefined}
+      aria-label={t('shell.menu')}
       tabIndex={open ? -1 : undefined}
     >
-      <div className={styles.sideInner}>
-        <div className={styles.brand}>
-          <button
-            type="button"
-            className={styles.brandLink}
-            onClick={() => {
-              navigate('/today');
-              onClose();
-            }}
-          >
-            <StarMark size={28} color="var(--sf-primary)" />
-            <div className={styles.brandText}>
-              <div className={styles.brandName}>
-                StarForge<span style={{ color: 'var(--sf-muted)', fontWeight: 500 }}> · EDU</span>
-              </div>
-              <div className={styles.brandSub}>{teacher?.branch ?? t('cohorts.branch')}</div>
-            </div>
-          </button>
-          <button
-            ref={closeRef}
-            type="button"
-            className={styles.sideClose}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            aria-label={t('common.close')}
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-
-        <div className={styles.sideSection}>{t('shell.primary')}</div>
-        {visibleNav(PRIMARY_NAV, teacher).map((item) => (
-          <NavItem key={item.id} item={item} badge={badges[item.badge]} onNavigate={onClose} />
-        ))}
-
-        <div className={styles.sideSection}>{t('shell.documents')}</div>
-        {visibleNav(SECONDARY_NAV, teacher).map((item) => (
-          <NavItem key={item.id} item={item} badge={badges[item.badge]} onNavigate={onClose} />
-        ))}
-
-        {visibleNav(PRIMARY_NAV, teacher).some((item) => item.id === 'ai') && (
-          <div className={styles.sideAi}>
-            <div className={styles.sideAiHead}>
-              <AiBadge compact>{t('shell.limit')}</AiBadge>
-              <span className="sf-mono" style={{ fontSize: 10, color: 'var(--sf-muted)' }}>
-                {pct}%
-              </span>
-            </div>
-            <div className={styles.sideAiBar}>
-              <div style={{ width: `${pct}%` }} />
-            </div>
-            <div className={`sf-mono ${styles.sideAiMeta}`}>
-              {(aiUsage?.used ?? 0).toLocaleString('ru-RU')} /{' '}
-              {(aiUsage?.limit ?? 0).toLocaleString('ru-RU')} {t('shell.token')}
-            </div>
-          </div>
-        )}
-
+      <header className="ad-rail-head">
         <button
-          className={styles.sideProfile}
+          type="button"
+          className="ad-rail-brand"
           onClick={() => {
-            navigate('/settings');
+            navigate('/today');
             onClose();
           }}
         >
-          <Avatar name={teacher?.name ?? 'A'} size={36} color="var(--sf-primary)" />
-          <div className={styles.profileText}>
-            <div className={styles.profileName}>{teacher?.name ?? '—'}</div>
-            <div className={styles.profileRole}>
-              <span className={styles.shareDot} />
-              {t('shell.profileShared')}
-            </div>
-          </div>
-          <Icon name="settings" size={16} style={{ color: 'var(--sf-muted)' }} />
+          <span aria-hidden="true">
+            <SfStar size={20} color="currentColor" />
+          </span>
+          <strong>
+            StarForge <small>EDU</small>
+          </strong>
         </button>
+        <button
+          ref={closeRef}
+          type="button"
+          className="ad-rail-close"
+          onClick={onClose}
+          aria-label={t('common.close')}
+        >
+          <Icon name="x" size={17} />
+        </button>
+      </header>
+
+      <div className="ad-rail-scope">
+        <span aria-hidden="true">
+          <Icon name="globe" size={16} />
+        </span>
+        <span>
+          <small>{teacher?.accountKind === 'teacher' ? 'Teaching scope' : 'Staff scope'}</small>
+          <strong>{scopeLabel(teacher)}</strong>
+        </span>
       </div>
+
+      <nav className="ad-rail-nav" aria-label={t('shell.menu')}>
+        <RailGroup
+          title={t('shell.primary')}
+          items={primary}
+          pathname={pathname}
+          badges={badges}
+          onNavigate={onClose}
+          t={t}
+        />
+        <RailGroup
+          title={t('shell.documents')}
+          items={secondary}
+          pathname={pathname}
+          badges={badges}
+          onNavigate={onClose}
+          t={t}
+        />
+      </nav>
+
+      <footer className="ad-rail-footer">
+        <button
+          type="button"
+          className="ad-rail-profile"
+          onClick={() => {
+            navigate(DATA_SOURCE === 'remote' ? '/account/profile' : '/settings');
+            onClose();
+          }}
+        >
+          <SfAvatar name={teacher?.name ?? 'A'} size={36} color="var(--sf-primary)" decorative />
+          <span>
+            <strong>{teacher?.name ?? 'Staff member'}</strong>
+            <small>{teacher?.role || (teacher?.accountKind === 'teacher' ? 'Teacher' : 'Staff')}</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="ad-rail-logout"
+          onClick={signOut}
+          disabled={signingOut}
+          aria-label={t('auth.signOut')}
+          title={t('auth.signOut')}
+        >
+          <Icon name="logout" size={16} />
+        </button>
+      </footer>
     </aside>
   );
 }

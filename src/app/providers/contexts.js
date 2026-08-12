@@ -1,7 +1,6 @@
 import { createContext } from 'react';
 import { Palette } from '@/domain/enums.js';
 import { DEFAULT_LOCALE, LOCALES } from '@/i18n/locale.js';
-import { services as defaultServices } from '@/services/container.js';
 
 export const I18nContext = createContext({
   locale: DEFAULT_LOCALE,
@@ -10,7 +9,7 @@ export const I18nContext = createContext({
   t: (key) => key,
 });
 
-export const ServicesContext = createContext(defaultServices);
+export const ServicesContext = createContext(null);
 
 export const ThemeContext = createContext({
   palette: Palette.SAROY,

@@ -6,16 +6,15 @@
 // a newly-issued staff account predictable while the backend is the source of
 // the final authorization decision.
 
-const MANAGEMENT_ROLES = new Set([
+const MANAGEMENT_ROLE_TOKENS = new Set([
   'director',
-  'head_of_dept',
   'manager',
   'ceo',
   'owner',
   'administrator',
   'admin',
-  'executive',
 ]);
+const MANAGEMENT_ROLE_PHRASES = ['chief_executive', 'head_of_department', 'head_of_dept'];
 
 const NON_STAFF_ROLES = new Set(['student', 'parent']);
 
@@ -53,12 +52,26 @@ export function normalizeRole(value) {
 export function profileRoles(profile) {
   const explicit = Array.isArray(profile?.roles) ? profile.roles : [];
   const memberships = Array.isArray(profile?.roleMemberships) ? profile.roleMemberships : [];
-  const inferred = [profile?.roleKey, ...memberships.map((membership) => membership?.role)];
+  const inferred = [
+    profile?.roleKey,
+    ...memberships.flatMap((membership) => [
+      membership?.role,
+      membership?.legacy_role,
+      membership?.account_type_slug,
+      membership?.account_type_name,
+    ]),
+  ];
   return [...new Set([...explicit, ...inferred].map(normalizeRole).filter(Boolean))];
 }
 
 export function isManagementProfile(profile) {
-  return profileRoles(profile).some((role) => MANAGEMENT_ROLES.has(role));
+  return profileRoles(profile).some((role) => {
+    const tokens = role.split('_').filter(Boolean);
+    return (
+      tokens.some((token) => MANAGEMENT_ROLE_TOKENS.has(token)) ||
+      MANAGEMENT_ROLE_PHRASES.some((phrase) => role.includes(phrase))
+    );
+  });
 }
 
 export function isStaffProfile(profile) {
@@ -70,14 +83,19 @@ export function isStaffProfile(profile) {
 }
 
 export function profilePermissions(profile) {
-  const explicit = Array.isArray(profile?.permissionCodes)
-    ? profile.permissionCodes.map((code) => String(code))
-    : [];
+  const explicit = [
+    ...(Array.isArray(profile?.permissionCodes) ? profile.permissionCodes : []),
+    ...(Array.isArray(profile?.effective_permissions) ? profile.effective_permissions : []),
+  ].map((code) => String(code));
+  // /users/me returns an authoritative array even when it is empty. Role-name
+  // fallbacks exist only for the isolated mock/local adapters and must never
+  // widen a live account beyond the backend's effective grants.
+  if (profile?.permissionsAuthoritative) return [...new Set(explicit)];
   const derived = profileRoles(profile).flatMap((role) => ROLE_PERMISSION_MATRIX[role] ?? []);
   return [...new Set([...explicit, ...derived])];
 }
 
-/** Whether a profile can open a resource. A write grant also opens its page. */
+/** Whether a profile holds one exact resource grant (or a matching wildcard). */
 export function canAccess(profile, resource, verb = null) {
   if (!isStaffProfile(profile)) return false;
   const target = String(resource ?? '').trim();
@@ -88,22 +106,22 @@ export function canAccess(profile, resource, verb = null) {
     if (permission === '*:*' || permissionResource === '*') return true;
     if (permissionResource !== target) return false;
     if (!verb) return true;
-    if (permissionVerb === '*' || permissionVerb === verb) return true;
-    // A workflow with write-only authorization (for example cashier payments)
-    // is still a valid destination, even where it cannot list history.
-    return verb === 'read' && permissionVerb === 'write';
+    return permissionVerb === '*' || permissionVerb === verb;
   });
+}
+
+export function canRead(profile, resource) {
+  return canAccess(profile, resource, 'read');
 }
 
 export function canWrite(profile, resource) {
   if (!isStaffProfile(profile)) return false;
-  const target = String(resource ?? '').trim();
-  return profilePermissions(profile).some((permission) => {
-    const [permissionResource, permissionVerb = ''] = permission.split(':');
-    return (
-      permission === '*:*' ||
-      permissionResource === '*' ||
-      (permissionResource === target && (permissionVerb === '*' || permissionVerb === 'write'))
-    );
-  });
+  if (profile?.readOnlySession || profile?.read_only_session) return false;
+  return canAccess(profile, resource, 'write');
+}
+
+/** Mutating workflow verbs can be narrower than write (approve, run, disburse…). */
+export function canPerform(profile, resource, verb = 'write') {
+  if (profile?.readOnlySession || profile?.read_only_session) return false;
+  return canAccess(profile, resource, verb);
 }

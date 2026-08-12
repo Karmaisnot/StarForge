@@ -1,59 +1,25 @@
-# StarForge EDU — container orchestration.
-#   Production image:  docker compose up web
-#   Hot-reload dev:    docker compose --profile dev up dev
+name: starforge-staff
+
 services:
-  web:
+  staff:
     build:
       context: .
-      target: runtime
+      dockerfile: Dockerfile
       args:
         VITE_DATA_SOURCE: remote
-        VITE_AUTH_ENDPOINT: role-login
-    image: starforge-edu:latest
-    ports:
-      - '8080:80'
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-
-  api:
-    build:
-      context: ./server
+    image: "${STAFF_IMAGE:-starforge-staff:1.0.0}"
     environment:
-      NODE_ENV: production
-      PORT: 4000
-      HOST: 0.0.0.0
-      DATABASE_URL: file:/data/dev.db
-      JWT_SECRET: ${STARFORGE_JWT_SECRET:-dev-only-change-me-to-a-long-random-string}
-      JWT_EXPIRES_IN: 12h
-      CORS_ORIGIN: http://localhost:8080
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-8}
-    volumes:
-      - starforge-data:/data
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -q --spider http://127.0.0.1:4000/health || exit 1']
-      interval: 5s
-      timeout: 3s
-      retries: 12
-    restart: unless-stopped
-
-  dev:
-    image: node:22-alpine
-    profiles: ['dev']
-    working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
-    environment:
-      VITE_DATA_SOURCE: local
+      API_UPSTREAM: "${API_UPSTREAM:?Set API_UPSTREAM to the verified HTTPS tenant backend origin}"
+    user: "101:101"
     ports:
-      - '5173:5173'
-    depends_on:
-      api:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - /app/node_modules
-
-volumes:
-  starforge-data:
+      - "${STAFF_BIND:-127.0.0.1}:${STAFF_PORT:-8080}:8080"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=24m,mode=1777
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
