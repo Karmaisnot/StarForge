@@ -1,8 +1,8 @@
-// Central API configuration. Production staff traffic goes directly to the
-// deployed StarForge API; localhost is used only by the explicit dev:local command.
+// Central API configuration. Production requests stay same-origin in the
+// browser and are forwarded to the deployed API by Vite/Nginx. This avoids
+// cross-origin browser requests and their CORS restrictions.
 
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
-export const PRODUCTION_API_ORIGIN = 'https://starforge.78.111.91.113.nip.io';
 
 // Production is remote by default. Local mode is opt-in and set solely by
 // scripts/dev-local.mjs for an isolated developer stack.
@@ -14,9 +14,7 @@ export const API_PREFIX = DATA_SOURCE === 'remote' ? '/api/v1' : '/api';
 export const API_MODE = DATA_SOURCE !== 'mock';
 export const LOCAL_API_MODE = DATA_SOURCE === 'local';
 
-const configuredBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim();
-const rawBaseUrl =
-  DATA_SOURCE === 'remote' ? configuredBaseUrl || PRODUCTION_API_ORIGIN : '';
+const rawBaseUrl = DATA_SOURCE === 'remote' ? import.meta.env?.VITE_API_BASE_URL?.trim() || '' : '';
 
 const baseUrl = rawBaseUrl.replace(/\/+$/, '');
 const baseAlreadyVersioned = baseUrl.endsWith(API_PREFIX);

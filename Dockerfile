@@ -9,12 +9,10 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 
 COPY . .
-# Production frontend talks directly to the deployed staff API.
+# Production frontend uses the same-origin Nginx API proxy.
 ARG VITE_DATA_SOURCE=remote
-ARG VITE_API_BASE_URL=https://starforge.78.111.91.113.nip.io
 ARG VITE_AUTH_ENDPOINT=role-login
 ENV VITE_DATA_SOURCE=$VITE_DATA_SOURCE
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_AUTH_ENDPOINT=$VITE_AUTH_ENDPOINT
 RUN npm run build
 

@@ -28,7 +28,7 @@ describe('password login API contract', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, request] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://starforge.78.111.91.113.nip.io/api/v1/auth/role-login/');
+    expect(url).toBe('/api/v1/auth/role-login/');
     expect(request.method).toBe('POST');
     expect(JSON.parse(request.body)).toMatchObject({
       username: 'nigora.karimova',
