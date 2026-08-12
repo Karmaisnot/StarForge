@@ -11,6 +11,7 @@ export function mapTeacher(teacher: TeacherWithRelations, summary: TeacherSummar
     role: teacher.role, // localized {uz,ru,en}
     branch: teacher.branch.name, // localized {uz,ru,en}
     username: teacher.username,
+    mustChangePassword: teacher.mustChangePassword,
     subjects: teacher.subjects.map((ts) => ts.subject.name), // localized[]
     summary,
     preferredLanguage: teacher.preferences?.locale ?? 'uz',

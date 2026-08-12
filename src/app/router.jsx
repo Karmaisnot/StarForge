@@ -8,6 +8,10 @@ import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 
 const lazyNamed = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
 const LoginPage = lazyNamed(() => import('@/features/auth/LoginPage.jsx'), 'LoginPage');
+const PasswordChangePage = lazyNamed(
+  () => import('@/features/auth/PasswordChangePage.jsx'),
+  'PasswordChangePage',
+);
 const TodayPage = lazyNamed(() => import('@/features/today/TodayPage.jsx'), 'TodayPage');
 const CohortsPage = lazyNamed(() => import('@/features/cohorts/CohortsPage.jsx'), 'CohortsPage');
 const TasksPage = lazyNamed(() => import('@/features/tasks/TasksPage.jsx'), 'TasksPage');
@@ -44,6 +48,7 @@ export const router = createBrowserRouter([
     element: <SessionGate />,
     errorElement: <RouteErrorPage />,
     children: [
+      { path: 'change-password', element: page(<PasswordChangePage />) },
       {
         element: <AppShell />,
         children: [

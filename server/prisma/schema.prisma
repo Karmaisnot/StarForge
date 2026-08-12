@@ -89,6 +89,7 @@ model Teacher {
   roleKey      String   @default("teacher")
   role         Json // localized
   passwordHash String
+  mustChangePassword Boolean @default(false)
   createdAt    DateTime @default(now())
 
   // per-teacher pointer to the AI conversation currently open (avoids a global flag race)

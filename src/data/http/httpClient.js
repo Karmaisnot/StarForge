@@ -4,7 +4,7 @@
 import { deepLocalize, getLocale } from '@/i18n/locale.js';
 import { apiUrl } from './apiConfig.js';
 import { ApiError } from './apiError.js';
-import { clearToken, getToken } from './authToken.js';
+import { clearToken, getToken, markPasswordChangeRequired } from './authToken.js';
 
 export class HttpError extends ApiError {}
 
@@ -103,6 +103,9 @@ async function request(
       payload,
       response.headers.get('Retry-After'),
     );
+    if (String(error.code).toUpperCase() === 'PASSWORD_CHANGE_REQUIRED') {
+      markPasswordChangeRequired();
+    }
     // There is deliberately no refresh/retry flow for this API. A lost session
     // is terminal and the route guard will take the user back to sign-in.
     if (error.status === 401) clearToken();

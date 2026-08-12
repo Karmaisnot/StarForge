@@ -1,6 +1,5 @@
-// Central API configuration. Production requests stay same-origin in the
-// browser and are forwarded to the deployed API by Vite/Nginx. This avoids
-// cross-origin browser requests and their CORS restrictions.
+// Central API configuration. Staff production traffic must go directly to the
+// deployed StarForge API -- never to a localhost development server.
 
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
 
@@ -14,7 +13,11 @@ export const API_PREFIX = DATA_SOURCE === 'remote' ? '/api/v1' : '/api';
 export const API_MODE = DATA_SOURCE !== 'mock';
 export const LOCAL_API_MODE = DATA_SOURCE === 'local';
 
-const rawBaseUrl = DATA_SOURCE === 'remote' ? import.meta.env?.VITE_API_BASE_URL?.trim() || '' : '';
+const PRODUCTION_API_ORIGIN = 'https://starforge.78.111.91.113.nip.io';
+const rawBaseUrl =
+  DATA_SOURCE === 'remote'
+    ? import.meta.env?.VITE_API_BASE_URL?.trim() || PRODUCTION_API_ORIGIN
+    : '';
 
 const baseUrl = rawBaseUrl.replace(/\/+$/, '');
 const baseAlreadyVersioned = baseUrl.endsWith(API_PREFIX);

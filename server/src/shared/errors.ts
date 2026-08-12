@@ -40,6 +40,15 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/** 403 — a temporary password must be replaced before any workspace access. */
+export class PasswordChangeRequiredError extends AppError {
+  readonly status = 403;
+  readonly code = 'PASSWORD_CHANGE_REQUIRED';
+  constructor() {
+    super('You must change your temporary password before continuing');
+  }
+}
+
 /** 404 — the addressed resource does not exist (within the tenant). */
 export class NotFoundError extends AppError {
   readonly status = 404;

@@ -2,7 +2,7 @@ import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/env';
-import { UnauthorizedError } from '../../shared/errors';
+import { PasswordChangeRequiredError, UnauthorizedError } from '../../shared/errors';
 
 /** Tenancy + identity carried on every authenticated request. */
 export interface AuthContext {
@@ -10,6 +10,7 @@ export interface AuthContext {
   academyId: string;
   sessionId: string;
   roleKey: string;
+  mustChangePassword: boolean;
 }
 
 /** Shape of the signed JWT payload. */
@@ -18,6 +19,7 @@ export interface AuthTokenPayload {
   academyId: string;
   sid: string; // sessionId
   roleKey: string;
+  mustChangePassword?: boolean;
 }
 
 declare module 'fastify' {
@@ -44,7 +46,7 @@ declare module '@fastify/jwt' {
  */
 export const authPlugin = fp<{
   config: AppConfig;
-  assertSessionActive: (sessionId: string, teacherId: string) => Promise<void>;
+  assertSessionActive: (sessionId: string, teacherId: string) => Promise<boolean>;
 }>(async (app: FastifyInstance, opts) => {
   await app.register(jwt, {
     secret: opts.config.JWT_SECRET,
@@ -61,12 +63,18 @@ export const authPlugin = fp<{
     if (!payload.sub || !payload.academyId || !payload.sid || !payload.roleKey) {
       throw new UnauthorizedError();
     }
-    await opts.assertSessionActive(payload.sid, payload.sub);
+    const mustChangePassword = await opts.assertSessionActive(payload.sid, payload.sub);
     req.auth = {
       teacherId: payload.sub,
       academyId: payload.academyId,
       sessionId: payload.sid,
       roleKey: payload.roleKey,
+      mustChangePassword,
     };
+
+    const path = req.url.split('?')[0]?.replace(/\/+$/, '') ?? '';
+    const mayUseTemporaryPassword =
+      path.endsWith('/auth/change-password') || path.endsWith('/auth/logout');
+    if (mustChangePassword && !mayUseTemporaryPassword) throw new PasswordChangeRequiredError();
   });
 });

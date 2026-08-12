@@ -1,5 +1,5 @@
-import { UnauthorizedError } from '../../shared/errors';
-import { verifyPassword } from '../../shared/password';
+import { UnauthorizedError, ValidationError } from '../../shared/errors';
+import { hashPassword, verifyPassword } from '../../shared/password';
 import type { AuthTokenPayload } from '../../http/plugins/auth';
 import type { AuthRepository } from './auth.repository';
 import type { SessionRepository } from './session.repository';
@@ -37,6 +37,7 @@ export class AuthService {
       academyId: teacher.academyId,
       sid: session.id,
       roleKey: teacher.roleKey,
+      mustChangePassword: teacher.mustChangePassword,
     };
   }
 
@@ -44,8 +45,33 @@ export class AuthService {
     await this.sessions.revoke(sessionId, teacherId);
   }
 
-  async assertSessionActive(sessionId: string, teacherId: string): Promise<void> {
+  async assertSessionActive(sessionId: string, teacherId: string): Promise<boolean> {
     const session = await this.sessions.findActive(sessionId, teacherId);
     if (!session) throw new UnauthorizedError('Your session has ended');
+
+    const teacher = await this.auth.findTeacherById(teacherId);
+    if (!teacher) throw new UnauthorizedError('Your account no longer exists');
+    return teacher.mustChangePassword;
+  }
+
+  async changePassword(
+    teacherId: string,
+    currentSessionId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const teacher = await this.auth.findTeacherById(teacherId);
+    if (!teacher) throw new UnauthorizedError('Your account no longer exists');
+
+    const currentMatches = await verifyPassword(currentPassword, teacher.passwordHash);
+    if (!currentMatches) throw new UnauthorizedError('The temporary password is incorrect');
+
+    const alreadyInUse = await verifyPassword(newPassword, teacher.passwordHash);
+    if (alreadyInUse) {
+      throw new ValidationError('Your new password must be different from the temporary password');
+    }
+
+    await this.auth.updatePassword(teacherId, await hashPassword(newPassword));
+    await this.sessions.revokeAllExcept(teacherId, currentSessionId);
   }
 }

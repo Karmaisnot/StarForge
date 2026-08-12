@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AuthService } from './auth.service';
-import { LoginSchema } from './auth.schemas';
+import { ChangePasswordSchema, LoginSchema } from './auth.schemas';
 
 /** Auth routes plugin factory. Mounted under /api. */
 export function authRoutes(service: AuthService) {
@@ -12,7 +12,18 @@ export function authRoutes(service: AuthService) {
         platform: body.platform ?? 'web',
       });
       const token = await reply.jwtSign(payload);
-      return { token };
+      return { token, mustChangePassword: payload.mustChangePassword };
+    });
+
+    app.post('/auth/change-password', { preHandler: [app.authenticate] }, async (req) => {
+      const body = ChangePasswordSchema.parse(req.body);
+      await service.changePassword(
+        req.auth.teacherId,
+        req.auth.sessionId,
+        body.currentPassword,
+        body.newPassword,
+      );
+      return { ok: true, mustChangePassword: false };
     });
 
     app.post('/auth/logout', { preHandler: [app.authenticate] }, async (req) => {

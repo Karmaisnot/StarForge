@@ -12,4 +12,15 @@ export class AuthRepository {
   findTeacherByUsername(username: string) {
     return this.db.teacher.findFirst({ where: { username } });
   }
+
+  findTeacherById(id: string) {
+    return this.db.teacher.findUnique({ where: { id } });
+  }
+
+  updatePassword(id: string, passwordHash: string) {
+    return this.db.teacher.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: false },
+    });
+  }
 }

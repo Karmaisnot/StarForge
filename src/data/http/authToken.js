@@ -5,6 +5,7 @@ import { apiUrl, isLocalApiMode } from './apiConfig.js';
 import { ApiError } from './apiError.js';
 
 const STORAGE_KEY = 'sf-session-access';
+const PASSWORD_CHANGE_STORAGE_KEY = 'sf-session-password-change-required';
 const DEVICE_KEY = 'sf-device-id';
 const AUTH_EVENT = 'sf:auth-changed';
 const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT || 'role-login';
@@ -15,6 +16,7 @@ const REMOTE_LOGIN_PATH = normalizedRemoteEndpoint
   : null;
 
 let token = readStorage(STORAGE_KEY);
+let passwordChangeRequired = readStorage(PASSWORD_CHANGE_STORAGE_KEY) === 'true';
 
 function readStorage(key) {
   try {
@@ -61,6 +63,15 @@ function stableDeviceId() {
   return value;
 }
 
+function responseRequiresPasswordChange(data) {
+  return Boolean(
+    data?.mustChangePassword ??
+      data?.must_change_password ??
+      data?.passwordChangeRequired ??
+      data?.password_change_required,
+  );
+}
+
 export function getToken() {
   return token;
 }
@@ -72,7 +83,29 @@ export function setToken(next) {
 }
 
 export function clearToken() {
-  setToken(null);
+  token = null;
+  passwordChangeRequired = false;
+  writeStorage(STORAGE_KEY, null);
+  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, null);
+  notifySessionChange();
+}
+
+/** Whether the active session may only replace a temporary password. */
+export function requiresPasswordChange() {
+  return Boolean(token && passwordChangeRequired);
+}
+
+/** Set when the API says the session is restricted to a password change. */
+export function markPasswordChangeRequired() {
+  passwordChangeRequired = true;
+  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, 'true');
+  notifySessionChange();
+}
+
+function markPasswordChangeComplete() {
+  passwordChangeRequired = false;
+  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, null);
+  notifySessionChange();
 }
 
 export function subscribeToSession(listener) {
@@ -111,8 +144,39 @@ export async function login({ username, password }) {
       message: 'The server did not return a session token.',
     });
   }
-  setToken(access);
+  token = access;
+  passwordChangeRequired = responseRequiresPasswordChange(data);
+  writeStorage(STORAGE_KEY, token);
+  writeStorage(PASSWORD_CHANGE_STORAGE_KEY, passwordChangeRequired ? 'true' : null);
+  notifySessionChange();
   return data;
+}
+
+/** Replace a temporary password before any staff workspace can be opened. */
+export async function changePassword({ currentPassword, newPassword }) {
+  const current = getToken();
+  if (!current) {
+    throw new ApiError(401, 'POST', 'auth/change-password', {
+      code: 'authentication_failed',
+      message: 'Your session has ended. Please sign in again.',
+    });
+  }
+
+  const path = isLocalApiMode() ? 'auth/change-password' : 'auth/change-password/';
+  const response = await fetch(apiUrl(path), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${current}`,
+      'Content-Type': 'application/json',
+      'Accept-Language': getLocale(),
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const payload = await parsePayload(response);
+  if (!response.ok || payload?.success === false) throw authError(response, 'POST', path, payload);
+
+  markPasswordChangeComplete();
+  return unwrap(payload);
 }
 
 /** End the server-side session when possible, then always remove it locally. */

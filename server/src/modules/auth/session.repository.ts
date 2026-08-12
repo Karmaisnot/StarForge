@@ -26,6 +26,13 @@ export class SessionRepository {
     });
   }
 
+  revokeAllExcept(teacherId: string, currentSessionId: string) {
+    return this.db.authSession.updateMany({
+      where: { teacherId, revokedAt: null, id: { not: currentSessionId } },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   listActive(teacherId: string) {
     return this.db.authSession.findMany({
       where: { teacherId, revokedAt: null },
