@@ -170,6 +170,11 @@ export function accessForPath(pathname) {
     '/people': 'students',
   };
   const normalized = String(pathname ?? '');
+  // The router's authenticated index route redirects `/` to `/today` from
+  // inside AppShell. Let that neutral entry route reach the Outlet; treating it
+  // as an unknown deep link blocks the redirect and strands valid staff users
+  // on the role-denied screen.
+  if (normalized === '/' || normalized === '') return { access: 'staff' };
   const aliased = DATA_SOURCE === 'remote'
     ? Object.entries(aliasByPrefix).find(([prefix]) => normalized === prefix || normalized.startsWith(`${prefix}/`))?.[1]
     : null;

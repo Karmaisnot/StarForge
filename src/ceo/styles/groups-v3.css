@@ -119,7 +119,9 @@
 
 .gp3-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Permission-scoped workspaces can expose one, two, three, or four metrics.
+     Collapse unused tracks so the visible cards always occupy the full row. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 10px;
   margin: 0 0 14px;
 }
