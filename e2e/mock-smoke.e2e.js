@@ -4,6 +4,13 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('sf-locale', 'en'));
 });
 
+test('sign-in always uses username and password', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByLabel('Username')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
+  await expect(page.getByLabel(/code/i)).toHaveCount(0);
+});
+
 test('dashboard charts and top-bar notifications are interactive', async ({ page }) => {
   await page.goto('/today');
   await expect(page.getByText('Your AI action center')).toBeVisible();

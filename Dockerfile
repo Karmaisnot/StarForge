@@ -9,9 +9,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 
 COPY . .
-# The image defaults to the production tenant API. docker-compose passes
-# `local` only for the bundled compatibility stack.
-ARG VITE_DATA_SOURCE=remote
+# The image defaults to the bundled staff API, which exposes /api/auth/login.
+ARG VITE_DATA_SOURCE=local
 ENV VITE_DATA_SOURCE=$VITE_DATA_SOURCE
 RUN npm run build
 

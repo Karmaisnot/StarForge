@@ -1,9 +1,8 @@
 # StarForge EDU — Staff Workspace
 
-This frontend is production-oriented by default. It connects to the tenant
-Django API in [starforge_edu](https://github.com/MythicalCosmic/starforge_edu),
-uses its OTP + JWT authentication flow, and hides every resource a staff role
-cannot open.
+This frontend uses the bundled Fastify/Prisma staff API by default. It signs
+staff in with `POST /api/auth/login` using username and password, and hides
+every resource a staff role cannot open.
 
 ## Production setup
 
@@ -13,17 +12,16 @@ copy .env.example .env
 npm run build
 ```
 
-Set `VITE_API_BASE_URL` only when the SPA is served from a different origin
-than the tenant backend. Requests use `/api/v1/` and must go to a configured
-tenant domain (the backend resolves tenant context from the host).
+The production container proxies `/api` to the staff API. For local work, run
+`npm run dev:local`; it starts Fastify on port 4000 and Vite on port 5173.
 
-Staff sign in with their work phone number or email and the one-time code sent
-by the backend. No demo records are used unless mock mode is explicitly set.
+Staff sign in with their username and password. No demo records are used unless
+mock mode is explicitly set.
 
 ## Role-aware workspaces
 
-The client mirrors the backend role matrix and receives the signed-in user from
-`/api/v1/users/me/`. Staff can see only the pages their role can access:
+The client reads the signed-in staff profile from the API and shows only the
+pages appropriate to the signed-in role:
 
 - Teachers: students, groups, schedule, attendance, academics, assignments, and content.
 - Cashiers and accountants: finance and payments; accountants also see reports.

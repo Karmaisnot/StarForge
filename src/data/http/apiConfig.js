@@ -1,18 +1,16 @@
-// Central API configuration. In production the SPA is served by the tenant host,
-// so an empty base URL deliberately keeps requests same-origin. During local
-// development Vite can proxy the same relative /api path to a tenant backend.
+// Central API configuration. The bundled Fastify staff API is the working
+// default and is served from the same origin under /api.
 
 const rawBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
 
-// Production is deliberately the default. Demo data is available only through
-// an explicit VITE_DATA_SOURCE=mock opt-in and can never leak into a deployment
-// because an environment variable was omitted.
+// A remote v1 API is an explicit integration choice. Never guess its routes:
+// the bundled staff API remains the safe default for this application.
 export const DATA_SOURCE = ['mock', 'local', 'remote'].includes(rawSource)
   ? rawSource
-  : 'remote';
+  : 'local';
 
-export const API_PREFIX = DATA_SOURCE === 'local' ? '/api' : '/api/v1';
+export const API_PREFIX = DATA_SOURCE === 'remote' ? '/api/v1' : '/api';
 export const API_MODE = DATA_SOURCE !== 'mock';
 export const LOCAL_API_MODE = DATA_SOURCE === 'local';
 

@@ -1,24 +1,20 @@
-// Session handling for the tenant API. The production Django service uses an
-// OTP exchange and JWT pair; the bundled local server remains password-based
-// for isolated development only.
+// Session handling for staff accounts. Authentication is permanently based on
+// username and password. The bundled API is the default implementation.
 import { getLocale } from '@/i18n/locale.js';
 import { apiUrl, isLocalApiMode } from './apiConfig.js';
 import { ApiError } from './apiError.js';
 
 const STORAGE_KEY = 'sf-session-access';
-const REFRESH_STORAGE_KEY = 'sf-session-refresh';
 const DEVICE_KEY = 'sf-device-id';
 const AUTH_EVENT = 'sf:auth-changed';
-const configuredStrategy = import.meta.env?.VITE_AUTH_STRATEGY;
-const legacyEndpoint = import.meta.env?.VITE_AUTH_ENDPOINT;
-const REMOTE_STRATEGY = configuredStrategy ?? (legacyEndpoint ? 'password' : 'otp');
+const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT;
 const LOCAL_LOGIN_PATH = 'auth/login';
-const REMOTE_LOGIN_PATH = legacyEndpoint
-  ? legacyEndpoint.replace(/^\/+|\/+$/g, '')
-  : 'auth/role-login/';
+const normalizedRemoteEndpoint = AUTH_ENDPOINT?.replace(/^\/+|\/+$/g, '');
+const REMOTE_LOGIN_PATH = normalizedRemoteEndpoint
+  ? `${normalizedRemoteEndpoint.startsWith('auth/') ? normalizedRemoteEndpoint : `auth/${normalizedRemoteEndpoint}`}/`
+  : null;
 
 let token = readStorage(STORAGE_KEY);
-let refreshToken = readStorage(REFRESH_STORAGE_KEY);
 
 function readStorage(key) {
   try {
@@ -69,30 +65,14 @@ export function getToken() {
   return token;
 }
 
-export function getRefreshToken() {
-  return refreshToken;
-}
-
 export function setToken(next) {
   token = typeof next === 'string' && next ? next : null;
   writeStorage(STORAGE_KEY, token);
   notifySessionChange();
 }
 
-export function setSession({ access, refresh } = {}) {
-  token = typeof access === 'string' && access ? access : null;
-  refreshToken = typeof refresh === 'string' && refresh ? refresh : null;
-  writeStorage(STORAGE_KEY, token);
-  writeStorage(REFRESH_STORAGE_KEY, refreshToken);
-  notifySessionChange();
-}
-
 export function clearToken() {
-  token = null;
-  refreshToken = null;
-  writeStorage(STORAGE_KEY, null);
-  writeStorage(REFRESH_STORAGE_KEY, null);
-  notifySessionChange();
+  setToken(null);
 }
 
 export function subscribeToSession(listener) {
@@ -101,51 +81,15 @@ export function subscribeToSession(listener) {
   return () => window.removeEventListener(AUTH_EVENT, listener);
 }
 
-/** True for the production backend's phone/email + one-time-code flow. */
-export function usesOtpAuth() {
-  return !isLocalApiMode() && REMOTE_STRATEGY === 'otp';
-}
-
-/** Ask the Django tenant backend to send an OTP to a phone number or email. */
-export async function requestOtp(identifier) {
-  const path = 'auth/otp/request/';
-  const response = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept-Language': getLocale() },
-    body: JSON.stringify({ identifier: String(identifier ?? '').trim() }),
-  });
-  const payload = await parsePayload(response);
-  if (!response.ok) throw authError(response, 'POST', path, payload);
-  return unwrap(payload);
-}
-
-/** Verify an OTP and persist the access/refresh JWT pair returned by Django. */
-export async function verifyOtp(identifier, code) {
-  const path = 'auth/otp/verify/';
-  const response = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept-Language': getLocale() },
-    body: JSON.stringify({
-      identifier: String(identifier ?? '').trim(),
-      code: String(code ?? '').trim(),
-    }),
-  });
-  const payload = await parsePayload(response);
-  if (!response.ok) throw authError(response, 'POST', path, payload);
-  const data = unwrap(payload);
-  if (!data?.access) {
-    throw new ApiError(500, 'POST', path, {
-      code: 'invalid_auth_response',
-      message: 'The server did not return a session token.',
-    });
-  }
-  setSession(data);
-  return data;
-}
-
-/** Password bridge used only by the bundled local server or an explicit legacy setting. */
+/** Authenticate a staff user with username and password. */
 export async function login({ username, password }) {
   const path = isLocalApiMode() ? LOCAL_LOGIN_PATH : REMOTE_LOGIN_PATH;
+  if (!path) {
+    throw new ApiError(500, 'POST', 'auth/login', {
+      code: 'auth_endpoint_not_configured',
+      message: 'This deployment has no configured username/password login endpoint.',
+    });
+  }
   const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept-Language': getLocale() },
@@ -167,7 +111,7 @@ export async function login({ username, password }) {
       message: 'The server did not return a session token.',
     });
   }
-  setSession({ access, refresh: data?.refresh });
+  setToken(access);
   return data;
 }
 
@@ -185,7 +129,7 @@ export async function logout() {
         'Accept-Language': getLocale(),
         ...(isLocalApiMode() ? {} : { 'Content-Type': 'application/json' }),
       },
-      body: !isLocalApiMode() && refreshToken ? JSON.stringify({ refresh: refreshToken }) : undefined,
+      body: undefined,
     });
     const payload = await parsePayload(response);
     if (!response.ok && response.status !== 401) throw authError(response, 'POST', path, payload);
