@@ -95,7 +95,8 @@
   grid-template-columns: 1fr;
 }
 .lessonHero,
-.rankCard {
+.rankCard,
+.focusCard {
   min-height: 286px;
   border-radius: 20px;
 }
@@ -266,6 +267,60 @@
   background: var(--sf-surface);
   box-shadow: 0 12px 36px rgba(30, 23, 16, 0.07);
 }
+.focusCard {
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid var(--sf-border);
+  border-radius: 20px;
+  background: var(--sf-surface);
+  box-shadow: 0 12px 36px rgba(30, 23, 16, 0.07);
+}
+.focusHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.focusHeader h2 {
+  margin: 5px 0 0;
+  font-family: var(--sf-font-display);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+.focusRows {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.focusRows button {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--sf-border);
+  border-radius: 11px;
+  color: var(--sf-ink);
+  background: var(--sf-surface-2);
+  text-align: left;
+  cursor: pointer;
+}
+.focusRows button > span {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+}
+.focusRows button strong { font-size: 15px; }
+.focusRows button small { overflow: hidden; color: var(--sf-muted); font-size: 10px; line-height: 1.25; }
 .rankHeader {
   display: flex;
   align-items: flex-start;
@@ -864,6 +919,9 @@
   font-family: var(--sf-font-mono);
   font-size: 8px;
 }
+.groupCycle { display: grid; min-width: 88px; gap: 3px; text-align: right; }
+.groupCycle strong { color: var(--sf-ink-2); font-size: 10px; }
+.groupCycle span { color: var(--sf-muted); font-size: 9px; }
 .groupCards span {
   padding: 3px 5px;
   border-radius: 5px;

@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useOutletContext } from 'react-router-dom';
 import { SessionGate } from '@/app/SessionGate.jsx';
 import { RouteErrorPage } from '@/app/RouteErrorPage.jsx';
 import { PageLoading } from '@/layout/PageState.jsx';
 import { DATA_SOURCE } from '@/data/http/apiConfig.js';
+import { isTeacherWorkspace } from '@/layout/navConfig.js';
 
 const lazyNamed = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
 const LoginPage = lazyNamed(() => import('@/features/auth/LoginPage.jsx'), 'LoginPage');
@@ -42,10 +43,27 @@ const StaffAccountWorkspace = lazyNamed(
   () => import('@/features/ceo/CeoAccountWorkspace.jsx'),
   'StaffAccountWorkspace',
 );
+const TeacherRequestsPage = lazyNamed(
+  () => import('@/features/workflows/TeacherWorkflowPages.jsx'),
+  'TeacherRequestsPage',
+);
+const TeacherReportsPage = lazyNamed(
+  () => import('@/features/workflows/TeacherWorkflowPages.jsx'),
+  'TeacherReportsPage',
+);
+const TeacherRecognitionPage = lazyNamed(
+  () => import('@/features/workflows/TeacherWorkflowPages.jsx'),
+  'TeacherRecognitionPage',
+);
 
 const page = (element) => <Suspense fallback={<PageLoading />}>{element}</Suspense>;
 const remote = DATA_SOURCE === 'remote';
 const resourcePage = () => page(<ResourceWorkspacePage />);
+
+function TeacherWorkflowRoute({ component: Component }) {
+  const { profile } = useOutletContext() ?? {};
+  return isTeacherWorkspace(profile) ? <Component /> : <ResourceWorkspacePage />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -73,13 +91,23 @@ export const router = createBrowserRouter([
             ? [
                 { path: 'students/*', element: page(<StaffStudentsWorkspace />) },
                 { path: 'cohorts/*', element: page(<StaffGroupsWorkspace />) },
+                { path: 'tasks/*', element: page(<TasksPage />) },
+                { path: 'messages/*', element: page(<MessagesPage />) },
+                { path: 'content/*', element: page(<MaterialsPage />) },
+                { path: 'forms', element: page(<SurveysPage />) },
+                { path: 'forms/:surveyId', element: page(<SurveysPage />) },
+                { path: 'approvals/*', element: page(<TeacherWorkflowRoute component={TeacherRequestsPage} />) },
+                { path: 'reports/*', element: page(<TeacherWorkflowRoute component={TeacherReportsPage} />) },
+                { path: 'recognition/*', element: page(<TeacherWorkflowRoute component={TeacherRecognitionPage} />) },
+                { path: 'printing/*', element: page(<PrintPage />) },
                 { path: 'academic', element: <Navigate to="/academics" replace /> },
                 { path: 'materials', element: <Navigate to="/content" replace /> },
                 { path: 'print', element: <Navigate to="/printing" replace /> },
                 { path: 'people/*', element: <Navigate to="/students" replace /> },
                 { path: 'work', element: <Navigate to="/tasks" replace /> },
-                { path: 'surveys/*', element: <Navigate to="/forms" replace /> },
-                { path: 'mgmt', element: <Navigate to="/messages" replace /> },
+                { path: 'surveys', element: <Navigate to="/forms" replace /> },
+                { path: 'surveys/:surveyId', element: page(<SurveysPage />) },
+                { path: 'mgmt', element: <Navigate to="/messages?scope=management" replace /> },
               ]
             : [
                 { path: 'cohorts', element: page(<CohortsPage />) },
@@ -105,7 +133,12 @@ export const router = createBrowserRouter([
                 },
                 { path: 'cards', element: <Navigate to="/cohorts" replace /> },
               ]),
-          { path: 'settings', element: page(<SettingsPage />) },
+          {
+            path: 'settings',
+            element: remote
+              ? <Navigate to="/account/workspace" replace />
+              : page(<SettingsPage />),
+          },
           {
             path: 'account/*',
             element: remote

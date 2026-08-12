@@ -130,7 +130,7 @@ export function AppShell() {
               <span className="ad-session-policy-state">Protected</span>
             </div>
           ) : null}
-          <Outlet />
+          <Outlet context={{ profile: teacher }} />
         </main>
       </div>
 

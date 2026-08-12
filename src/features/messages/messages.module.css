@@ -400,6 +400,38 @@
   width: 205px;
   height: 31px;
 }
+.downloadAttachment {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 240px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 11px;
+  color: inherit;
+  background: color-mix(in srgb, var(--sf-surface) 15%, transparent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.downloadAttachment > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sf-surface) 78%, transparent);
+  color: var(--sf-primary);
+}
+.downloadAttachment strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .systemMessage {
   align-self: center;
   padding: 6px 10px;

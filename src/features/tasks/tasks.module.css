@@ -185,6 +185,16 @@
   font-size: 10.5px;
   color: var(--sf-muted);
 }
+.recipient {
+  display: inline-flex;
+  max-width: 112px;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  color: var(--sf-ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .subs {
   padding: 1px 6px;
   border-radius: 4px;
@@ -269,6 +279,64 @@
 }
 .inputCtl:focus {
   border-color: var(--sf-primary);
+}
+.taskDescription {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.targetPicker {
+  max-height: 250px;
+  overflow: auto;
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: var(--sf-bg);
+}
+.targetSection + .targetSection {
+  border-top: 1px solid var(--sf-border);
+}
+.targetSectionTitle {
+  padding: 9px 11px 5px;
+  color: var(--sf-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.targetRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+.targetRow:hover {
+  background: var(--sf-surface-2);
+}
+.targetRow > span:not([class]) {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.targetRow strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.targetRow small,
+.targetNote {
+  color: var(--sf-muted);
+  font-size: 10.5px;
+}
+.targetNote {
+  padding: 7px 2px 0;
+}
+.targetSummary {
+  align-self: flex-end;
+  color: var(--sf-primary);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* Calendar view */

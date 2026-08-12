@@ -411,9 +411,9 @@ export function ResourceWorkspacePage() {
   return (
     <>
       <PageHeader
-        eyebrow="Live staff workspace"
+        eyebrow="Staff workspace"
         title={resource.title}
-        subtitle="Scoped directly by your active role, branch, department, and backend permissions."
+        subtitle="Information and actions available for your role and assigned location."
         right={
           <div className={styles.headerActions}>
             {readGranted && (
@@ -477,9 +477,9 @@ export function ResourceWorkspacePage() {
           <strong>
             {readGranted
               ? writeGranted
-                ? 'Scoped read & write'
-                : 'Scoped read only'
-              : 'Scoped workflow only'}
+                ? 'View and manage'
+                : 'View only'
+              : 'Request access'}
           </strong>
         </div>
       </section>
@@ -494,7 +494,7 @@ export function ResourceWorkspacePage() {
             <h2>{collection.title}</h2>
             <p>
               Your account can complete the approved workflows here, but the full register is
-              intentionally hidden by the backend. Every submission is branch-scoped and audited.
+              not part of your assigned responsibilities. Every submission is recorded for review.
             </p>
           </div>
           <div className={styles.workflowButtons}>
@@ -610,7 +610,7 @@ export function ResourceWorkspacePage() {
                 ) : selected.is_active === true ? (
                   <Chip tone="success">Active</Chip>
                 ) : (
-                  <Chip tone="neutral">Live data</Chip>
+                  <Chip tone="neutral">Current</Chip>
                 )}
               </div>
 
@@ -629,7 +629,7 @@ export function ResourceWorkspacePage() {
                 <span>
                   {recordDate(selected)
                     ? `Updated ${recordDate(selected)}`
-                    : 'Live, permission-scoped API record'}
+                    : 'Current workspace record'}
                 </span>
                 {(canUpdate || canRemove || recordActions.length > 0) && (
                   <div>
@@ -671,7 +671,7 @@ export function ResourceWorkspacePage() {
             <div className={styles.emptyDetail}>
               <Icon name={resource.icon} size={30} />
               <strong>Select a record</strong>
-              <span>Its full API-backed details will appear here.</span>
+              <span>Its complete details will appear here.</span>
             </div>
           )}
         </aside>
@@ -904,7 +904,7 @@ function RecordDialog({
           ))
         ) : (
           <label className={styles.formField}>
-            <span>API payload</span>
+            <span>Additional details</span>
             <textarea
               className={styles.jsonEditor}
               rows="13"
@@ -915,8 +915,7 @@ function RecordDialog({
               aria-describedby="advanced-payload-help"
             />
             <small id="advanced-payload-help" className={styles.fieldHelp}>
-              This less-common workflow uses the backend&apos;s closed JSON contract. Invalid or
-              out-of-scope fields are rejected without saving.
+              Enter the requested structured details. Unavailable or invalid fields will not be saved.
             </small>
           </label>
         )}

@@ -1,201 +1,319 @@
-import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { Button, Card, Chip, Icon, Stat } from '@/ui';
+import { Button, Card, Chip, Icon, Modal, Stat } from '@/ui';
 import { useServices } from '@/hooks/useServices.js';
 import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import { plural } from '@/i18n/plural.js';
-import { isApiMode } from '@/data/http/apiConfig.js';
 import styles from './materials.module.css';
 
 const KIND_ICON = { pdf: 'pdf', video: 'video', doc: 'doc' };
 
-const EXT_KIND = { pdf: 'pdf', mp4: 'video', mov: 'video', avi: 'video', doc: 'doc', docx: 'doc' };
+function statusTone(status) {
+  if (status === 'clean') return 'success';
+  if (status === 'rejected') return 'danger';
+  return 'warn';
+}
 
-function humanSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+function UploadModal({ open, targets, busy, onClose, onUpload }) {
+  const { t } = useT();
+  const [file, setFile] = useState(null);
+  const [title, setTitle] = useState('');
+  const [targetKey, setTargetKey] = useState('');
+  const [downloadable, setDownloadable] = useState(true);
+
+  useEffect(() => {
+    if (!open) return;
+    setFile(null);
+    setTitle('');
+    setTargetKey(targets?.[0]?.key ?? '');
+    setDownloadable(true);
+  }, [open, targets]);
+
+  const submit = async (event) => {
+    event?.preventDefault?.();
+    const target = targets.find((item) => item.key === targetKey);
+    if (!file || !target || busy) return;
+    await onUpload({ file, title: title.trim() || file.name, target, downloadable });
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t('materials.uploadTitle')}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            icon="upload"
+            onClick={submit}
+            disabled={!file || !targetKey || busy}
+          >
+            {busy ? t('materials.uploading') : t('materials.upload')}
+          </Button>
+        </>
+      }
+    >
+      <form className={styles.uploadForm} onSubmit={submit}>
+        <label className={styles.dropzone}>
+          <Icon name={file ? 'check' : 'upload'} size={24} />
+          <strong>{file?.name || t('materials.chooseFile')}</strong>
+          <span>{file ? `${Math.max(1, Math.round(file.size / 1024))} KB` : t('materials.fileHint')}</span>
+          <input
+            type="file"
+            onChange={(event) => {
+              const next = event.target.files?.[0] ?? null;
+              setFile(next);
+              if (next && !title) setTitle(next.name.replace(/\.[^.]+$/, ''));
+            }}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>{t('materials.displayTitle')}</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label className={styles.field}>
+          <span>{t('materials.audience')}</span>
+          <select value={targetKey} onChange={(event) => setTargetKey(event.target.value)}>
+            {targets.map((target) => (
+              <option key={target.key} value={target.key}>
+                {target.label}{target.detail ? ` · ${target.detail}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={styles.switchRow}>
+          <span>
+            <strong>{t('materials.allowDownload')}</strong>
+            <small>{
+              downloadable ? t('materials.allowDownloadHint') : t('materials.viewOnlyHint')
+            }</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={downloadable}
+            onChange={(event) => setDownloadable(event.target.checked)}
+          />
+        </label>
+      </form>
+    </Modal>
+  );
 }
 
 export function MaterialsPage() {
-  const navigate = useNavigate();
   const toast = useToast();
   const { t, locale } = useT();
   const { materials } = useServices();
-  const writesEnabled = !isApiMode();
-  // A reload nonce gives us a real refetch handle on top of useAsync: bumping it
-  // re-runs the loader so server truth replaces the optimistic scratch state.
   const [reloadKey, setReloadKey] = useState(0);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(null);
   const state = useAsync(
     () =>
-      Promise.all([materials.getList(), materials.getStats(), materials.getStorage()]).then(
-        ([list, stats, storage]) => ({ list, stats, storage }),
-      ),
+      Promise.all([
+        materials.getList(),
+        materials.getStats(),
+        materials.getStorage(),
+        materials.getTargets(),
+      ]).then(([list, stats, storage, targets]) => ({ list, stats, storage, targets })),
     [locale, reloadKey],
   );
-  const reload = () => setReloadKey((k) => k + 1);
-  const fileRef = useRef(null);
-  const [uploaded, setUploaded] = useState([]);
-  const [removed, setRemoved] = useState({});
+  const reload = () => setReloadKey((key) => key + 1);
 
-  const removeFile = async (file) => {
-    // Optimistic: drop the row instantly so the UI reacts before the network round-trip.
-    setUploaded((list) => list.filter((f) => f.id !== file.id));
-    setRemoved((r) => ({ ...r, [file.id]: true }));
-    toast(`${t('materials.removed')} · ${file.title}`);
-    // Newly uploaded rows that were never persisted have no server id to delete.
-    if (typeof file.id === 'string' && file.id.startsWith('up-')) return;
+  const visible = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase(locale);
+    return (state.data?.list ?? []).filter(
+      (file) =>
+        (status === 'all' || file.status === status || (status === 'viewOnly' && !file.downloadable)) &&
+        `${file.title} ${file.destination} ${file.uploadedBy}`
+          .toLocaleLowerCase(locale)
+          .includes(normalized),
+    );
+  }, [state.data, query, status, locale]);
+
+  const upload = async (input) => {
+    setBusy(true);
+    try {
+      const created = await materials.create(input);
+      toast(`${created.length} ${t('materials.uploaded')}`, 'success');
+      setUploadOpen(false);
+      reload();
+    } catch (error) {
+      toast(error?.message || t('common.error'), 'danger');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const download = async (file) => {
+    try {
+      const result = await materials.download(file.id);
+      const anchor = document.createElement('a');
+      anchor.href = result.url;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener';
+      anchor.download = file.title;
+      anchor.click();
+    } catch (error) {
+      toast(error?.message || t('materials.notReady'), 'danger');
+    }
+  };
+
+  const remove = async (file) => {
+    if (!window.confirm(`${t('materials.removeConfirm')} “${file.title}”?`)) return;
+    setRemoving(file.id);
     try {
       await materials.remove(file.id);
-      // Reconcile with server truth; the refetch covers this id so clear the scratch flag.
-      setRemoved((r) => {
-        const rest = { ...r };
-        delete rest[file.id];
-        return rest;
-      });
+      toast(t('materials.removed'), 'success');
       reload();
-    } catch {
-      // Roll back the optimistic removal and surface the failure.
-      setRemoved((r) => {
-        const rest = { ...r };
-        delete rest[file.id];
-        return rest;
-      });
-      toast(`${t('common.error')} · ${file.title}`, 'error');
+    } catch (error) {
+      toast(error?.message || t('common.error'), 'danger');
+    } finally {
+      setRemoving(null);
     }
-  };
-
-  const onPick = async (e) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    const now = new Date().toLocaleDateString();
-    const items = files.map((f, i) => {
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      return {
-        file: f,
-        ext,
-        id: `up-${Date.now()}-${i}`,
-        title: f.name,
-        kind: EXT_KIND[ext] ?? 'doc',
-        color: 'var(--sf-primary)',
-        meta: `${(ext || 'file').toUpperCase()} · ${humanSize(f.size)}`,
-        views: 0,
-        date: now,
-      };
-    });
-    // Optimistic: render the new rows immediately (strip the raw File handle).
-    setUploaded((list) => [...items.map(({ file: _f, ext: _e, ...row }) => row), ...list]);
-    toast(`+ ${files.length} ${plural(locale, 'files', files.length)}`, 'success');
-    e.target.value = '';
-    try {
-      // Persist metadata for each picked file (no real bytes are uploaded).
-      await Promise.all(
-        items.map((it) =>
-          materials.create({
-            title: it.title,
-            kind: it.kind,
-            sizeBytes: it.file.size,
-            meta: it.meta,
-          }),
-        ),
-      );
-      // Server now owns these rows; drop the optimistic scratch and pull fresh truth.
-      setUploaded([]);
-      reload();
-    } catch {
-      // Roll back the optimistic rows and surface the failure.
-      const failedIds = new Set(items.map((it) => it.id));
-      setUploaded((list) => list.filter((row) => !failedIds.has(row.id)));
-      toast(t('common.error'), 'error');
-    }
-  };
-
-  // Real client-side download of the (placeholder) material payload.
-  const download = (file) => {
-    const blob = new Blob([`StarForge EDU · ${file.title}\n${file.meta ?? ''}`], {
-      type: 'text/plain',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${file.title}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
     <AsyncBoundary state={state}>
-      {(d) => (
+      {(data) => (
         <>
           <PageHeader
             title={t('materials.title')}
-            subtitle={`${d.storage.fileCount} ${plural(locale, 'files', d.storage.fileCount)} · ${d.storage.used} / ${d.storage.total}`}
+            subtitle={t('materials.subtitle')}
             right={
-              writesEnabled ? (
-                <>
-                  <input ref={fileRef} type="file" multiple hidden onChange={onPick} />
-                  <Button variant="primary" icon="upload" onClick={() => fileRef.current?.click()}>
-                    {t('materials.upload')}
-                  </Button>
-                </>
+              data.targets.length > 0 ? (
+                <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>
+                  {t('materials.upload')}
+                </Button>
               ) : null
             }
           />
 
           <div className={styles.statGrid}>
-            {d.stats.map((s, i) => (
-              <Stat key={i} value={s.value} label={s.label} color={s.color} />
-            ))}
+            <Stat value={String(data.storage.fileCount)} label={t('materials.totalFiles')} color="var(--sf-primary)" />
+            <Stat
+              value={String(data.list.filter((file) => file.status === 'clean').length)}
+              label={t('materials.available')}
+              color="var(--sf-success)"
+            />
+            <Stat
+              value={String(data.list.filter((file) => !file.downloadable).length)}
+              label={t('materials.viewOnly')}
+              color="var(--sf-accent)"
+            />
+            <Stat value={data.storage.used} label={t('materials.storageUsed')} color="var(--sf-warn)" />
           </div>
 
-          <Card title={t('materials.recent')} padded={false}>
-            {[...uploaded, ...d.list]
-              .filter((f) => !removed[f.id])
-              .map((f) => (
-                <div key={f.id} className={styles.row}>
-                  <div className={styles.thumb} style={{ background: f.color }}>
-                    <Icon name={KIND_ICON[f.kind] ?? 'doc'} size={22} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{f.title}</span>
-                      {f.aiSummary && <Chip tone="ai">{t('materials.aiSummary')}</Chip>}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--sf-muted)', marginTop: 2 }}>
-                      <span className="sf-mono">{f.meta}</span> · {f.views}{' '}
-                      {plural(locale, 'views', f.views)} · {f.date}
-                    </div>
-                  </div>
+          <Card padded={false}>
+            <div className={styles.toolbar}>
+              <div className={styles.searchBox}>
+                <Icon name="search" size={15} />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('materials.search')}
+                />
+              </div>
+              <div className={styles.filters}>
+                {[
+                  ['all', t('common.showAll')],
+                  ['clean', t('materials.available')],
+                  ['pending', t('materials.processing')],
+                  ['viewOnly', t('materials.viewOnly')],
+                ].map(([value, label]) => (
                   <button
-                    className={styles.iconBtn}
-                    onClick={() => download(f)}
-                    aria-label={t('materials.download')}
+                    type="button"
+                    key={value}
+                    className={status === value ? styles.filterActive : ''}
+                    onClick={() => setStatus(value)}
                   >
-                    <Icon name="download" size={16} />
+                    {label}
                   </button>
-                  <button
-                    className={styles.iconBtn}
-                    onClick={() => navigate('/print')}
-                    aria-label={t('print.title')}
-                  >
-                    <Icon name="print" size={16} />
-                  </button>
-                  {writesEnabled && (
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.libraryHead}>
+              <span>{t('materials.file')}</span>
+              <span>{t('materials.destination')}</span>
+              <span>{t('materials.access')}</span>
+              <span>{t('materials.activity')}</span>
+              <span />
+            </div>
+            {visible.length > 0 ? (
+              visible.map((file) => (
+                <div key={file.id} className={styles.row}>
+                  <div className={styles.fileCell}>
+                    <div className={styles.thumb} style={{ background: file.color }}>
+                      <Icon name={KIND_ICON[file.kind] ?? 'doc'} size={22} />
+                    </div>
+                    <span>
+                      <strong>{file.title}</strong>
+                      <small>{file.meta} · {file.date}</small>
+                    </span>
+                  </div>
+                  <div className={styles.destinationCell}>
+                    <Icon name={file.audience === 'global' ? 'globe' : 'cohort'} size={15} />
+                    <span>{file.destination}</span>
+                  </div>
+                  <div className={styles.accessCell}>
+                    <Chip tone={statusTone(file.status)}>{t(`materials.status.${file.status}`)}</Chip>
+                    <span className={styles.accessLabel}>
+                      <Icon name={file.downloadable ? 'download' : 'shield'} size={13} />
+                      {file.downloadable ? t('materials.downloadable') : t('materials.viewOnly')}
+                    </span>
+                  </div>
+                  <div className={styles.activityCell}>
+                    <strong>{file.views}</strong>
+                    <span>{plural(locale, 'views', file.views)}</span>
+                  </div>
+                  <div className={styles.actions}>
                     <button
+                      type="button"
                       className={styles.iconBtn}
-                      onClick={() => removeFile(f)}
-                      aria-label={t('materials.removed')}
+                      onClick={() => download(file)}
+                      disabled={file.status !== 'clean'}
+                      aria-label={t('materials.download')}
                     >
-                      <Icon name="x" size={16} />
+                      <Icon name="download" size={16} />
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      onClick={() => remove(file)}
+                      disabled={removing === file.id}
+                      aria-label={t('materials.remove')}
+                    >
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </div>
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className={styles.empty}>
+                <Icon name="book" size={28} />
+                <strong>{t('materials.empty')}</strong>
+                <span>{t('materials.emptyHint')}</span>
+              </div>
+            )}
           </Card>
+
+          <UploadModal
+            open={uploadOpen}
+            targets={data.targets}
+            busy={busy}
+            onClose={() => !busy && setUploadOpen(false)}
+            onUpload={upload}
+          />
         </>
       )}
     </AsyncBoundary>

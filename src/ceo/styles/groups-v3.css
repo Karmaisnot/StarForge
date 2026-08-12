@@ -334,10 +334,38 @@
 .gp3-range-presets button { min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--sf-muted); cursor: pointer; font-size: 11px; font-weight: 720; }
 .gp3-range-presets button:hover { color: var(--sf-ink); background: var(--sf-surface); }
 .gp3-range-presets button.is-active { color: var(--sf-primary); background: var(--sf-surface); box-shadow: var(--sf-shadow-sm); }
-.gp3-range label { display: grid; gap: 5px; }
-.gp3-range input { min-width: 135px; }
+.gp3-range label { display: grid; flex: 0 0 148px; gap: 5px; }
+.gp3-range input { width: 100%; min-width: 0; }
+.gp3-range .gp3-button { min-width: 78px; min-height: 38px; }
 .gp3-two-col { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 14px; }
+.gp3-two-col.is-single { grid-template-columns: minmax(0, 1fr); }
 .gp3-two-col > .gp3-panel { min-width: 0; }
+
+.gp3-progress-workspace { display: grid; gap: 14px; padding: 16px; }
+.gp3-cycle-summary { display: grid; grid-template-columns: minmax(200px, .75fr) minmax(220px, 1.25fr); align-items: center; gap: 15px; }
+.gp3-cycle-track { overflow: hidden; height: 9px; border-radius: 999px; background: var(--sf-surface-2); box-shadow: inset 0 0 0 1px var(--gp3-line); }
+.gp3-cycle-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--sf-primary), color-mix(in srgb, var(--sf-primary) 60%, #f4cf81)); }
+.gp3-cycle-summary strong, .gp3-cycle-summary small { display: block; }
+.gp3-cycle-summary strong { color: var(--sf-ink-2); font-size: 12px; }
+.gp3-cycle-summary small { margin-top: 4px; color: var(--sf-muted); font-size: 11px; }
+.gp3-progress-form { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(130px, .7fr) minmax(180px, .9fr); gap: 10px; padding-top: 14px; border-top: 1px solid var(--gp3-line); }
+.gp3-progress-form label, .gp3-attendance-toolbar label { display: grid; gap: 6px; }
+.gp3-progress-form label > span, .gp3-attendance-toolbar label > span { color: var(--sf-muted); font-size: 10px; font-weight: 780; letter-spacing: .06em; text-transform: uppercase; }
+.gp3-progress-form input, .gp3-progress-form select, .gp3-attendance-toolbar select, .gp3-attendance-register select { min-height: 39px; border: 1px solid var(--gp3-line); border-radius: 9px; background: var(--sf-surface); color: var(--sf-ink); padding: 8px 10px; }
+.gp3-progress-form .fw-form-error { grid-column: 1 / -1; }
+.gp3-progress-actions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.gp3-progress-readonly { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--gp3-line); border-radius: 11px; overflow: hidden; }
+.gp3-progress-readonly .gp3-fact { border-bottom: 0; }
+
+.gp3-attendance-capture { display: grid; gap: 13px; padding: 14px; }
+.gp3-attendance-toolbar { display: flex; align-items: end; gap: 9px; }
+.gp3-attendance-toolbar label { min-width: min(360px, 50%); margin-right: auto; }
+.gp3-attendance-register { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gp3-attendance-register > label { display: grid; grid-template-columns: minmax(0, 1fr) 125px; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--gp3-line); border-radius: 10px; background: var(--sf-surface-2); }
+.gp3-attendance-register > label > span { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.gp3-attendance-register strong { overflow: hidden; color: var(--sf-ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.gp3-attendance-submit { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 12px; border-top: 1px solid var(--gp3-line); }
+.gp3-attendance-submit > span { margin-right: auto; color: var(--sf-muted); font-size: 11px; }
 
 .gp3-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .gp3-fact { display: grid; gap: 5px; min-height: 80px; align-content: center; padding: 14px 18px; border-right: 1px solid var(--gp3-line); border-bottom: 1px solid var(--gp3-line); }
@@ -462,6 +490,8 @@
   .gp3-filter-search { grid-column: 1 / -1; }
   .gp3-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gp3-two-col { grid-template-columns: 1fr; }
+  .gp3-progress-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gp3-progress-form label:first-of-type { grid-column: 1 / -1; }
   .gp3-section-nav a { padding-inline: 12px; }
 }
 
@@ -493,6 +523,9 @@
   .gp3-range-presets button { flex: 1; }
   .gp3-range .gp3-button { grid-column: 1 / -1; }
   .gp3-range input { min-width: 0; }
+  .gp3-cycle-summary, .gp3-attendance-register { grid-template-columns: 1fr; }
+  .gp3-attendance-toolbar { align-items: stretch; flex-direction: column; }
+  .gp3-attendance-toolbar label { width: 100%; min-width: 0; }
   .gp3-query-state.is-error { grid-template-columns: auto minmax(0, 1fr); }
   .gp3-query-state.is-error button { grid-column: 1 / -1; width: 100%; }
   .gp3-month-bars button { grid-template-columns: minmax(0, 1fr) 54px; gap: 8px; }
@@ -510,6 +543,12 @@
   .gp3-fact:last-child { border-bottom: 0; }
   .gp3-range { grid-template-columns: 1fr; }
   .gp3-range > span, .gp3-range .gp3-button { grid-column: auto; }
+  .gp3-progress-form, .gp3-progress-readonly { grid-template-columns: 1fr; }
+  .gp3-progress-form label:first-of-type { grid-column: auto; }
+  .gp3-progress-actions { display: grid; grid-template-columns: 1fr; }
+  .gp3-attendance-register > label { grid-template-columns: 1fr; }
+  .gp3-attendance-submit { align-items: stretch; flex-direction: column; }
+  .gp3-attendance-submit .gp3-button { width: 100%; }
   .gp3-inline-warning { align-items: flex-start; flex-wrap: wrap; }
   .gp3-inline-warning button { width: 100%; }
   .gp3-manage-disclosure > summary { align-items: flex-start; flex-direction: column; }

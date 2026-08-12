@@ -66,7 +66,11 @@ export function TodayPage() {
 
             <div className={`${styles.commandGrid} ${staffMode ? styles.singleCommand : ''}`}>
               <NextLesson lesson={data.heroLesson} t={t} navigate={navigate} />
-              {!staffMode && <RankCard rank={performance.rank} t={t} />}
+              {!staffMode && (
+                performance.rank.position > 0 && performance.rank.total > 0
+                  ? <RankCard rank={performance.rank} t={t} />
+                  : <TeachingFocusCard focus={data.focus} t={t} navigate={navigate} />
+              )}
             </div>
 
             <section className={styles.performanceSection} aria-labelledby="performance-heading">
@@ -319,9 +323,15 @@ function NextLesson({ lesson, t, navigate }) {
           </>
         ) : (
           <>
-            <Button variant="cream" icon="check" onClick={() => navigate('/cohorts')}>
-              {t('today.takeAttendance')}
-            </Button>
+            {lesson.canTakeAttendance ? (
+              <Button variant="cream" icon="check" onClick={() => navigate(lesson.cohortId ? `/cohorts/${lesson.cohortId}/attendance?lesson=${lesson.lessonId}` : '/cohorts')}>
+                {t('today.takeAttendance')}
+              </Button>
+            ) : (
+              <Button variant="cream" icon="cohort" onClick={() => navigate(lesson.cohortId ? `/cohorts/${lesson.cohortId}` : '/cohorts')}>
+                {t('today.openGroup')}
+              </Button>
+            )}
             <Button variant="cream-ghost" icon="book" onClick={() => navigate('/materials')}>
               {t('today.lessonPlan')}
             </Button>
@@ -330,6 +340,37 @@ function NextLesson({ lesson, t, navigate }) {
             </Button>
           </>
         )}
+      </div>
+    </section>
+  );
+}
+
+function TeachingFocusCard({ focus = {}, t, navigate }) {
+  const rows = [
+    { key: 'lessonsToday', value: focus.lessonsToday ?? 0, label: t('today.lessonsToday'), icon: 'cal', path: '/cohorts' },
+    { key: 'attendancePending', value: focus.attendancePending ?? 0, label: t('today.attendancePending'), icon: 'check', path: '/cohorts' },
+    { key: 'gradingPending', value: focus.gradingPending ?? 0, label: t('today.gradingPending'), icon: 'doc', path: '/cohorts' },
+    { key: 'cyclesDue', value: focus.cyclesDue ?? 0, label: t('today.cyclesDue'), icon: 'trend', path: '/cohorts' },
+  ];
+  const attention = rows.reduce((sum, row) => sum + (row.key === 'lessonsToday' ? 0 : Number(row.value) || 0), 0);
+  return (
+    <section className={styles.focusCard} aria-label={t('today.teachingFocus')}>
+      <header className={styles.focusHeader}>
+        <div>
+          <span className={styles.panelEyebrow}>{t('today.teachingFocus')}</span>
+          <h2>{attention ? t('today.focusActionTitle') : t('today.focusClearTitle')}</h2>
+        </div>
+        <Chip tone={attention ? 'accent' : 'success'}>{attention ? `${attention}` : t('today.onTrack')}</Chip>
+      </header>
+      <div className={styles.focusRows}>
+        {rows.map((row) => (
+          <button type="button" key={row.key} onClick={() => navigate(row.path)}>
+            <span><Icon name={row.icon} size={15} /></span>
+            <strong className="sf-mono">{row.value}</strong>
+            <small>{row.label}</small>
+            <Icon name="chevR" size={13} />
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -640,7 +681,8 @@ function GroupHealth({ groups, t, onOpen }) {
   return (
     <div className={styles.groupRows}>
       {groups.map((group) => {
-        const healthy = group.attendance >= 90 && group.down <= 4;
+        const hasAttendance = group.attendance != null;
+        const healthy = hasAttendance && group.attendance >= 90 && group.down <= 4;
         return (
           <button
             key={group.id ?? group.name}
@@ -654,18 +696,18 @@ function GroupHealth({ groups, t, onOpen }) {
               </span>
               <div>
                 <strong>{group.name}</strong>
-                <span>{healthy ? t('today.onTrack') : t('today.needsAttention')}</span>
+                <span>{group.level || t(healthy ? 'today.onTrack' : 'today.needsAttention')} · {group.students} {t('today.studentsShort')}</span>
               </div>
             </div>
             <div className={styles.groupAttendance}>
               <div>
                 <span style={{ width: `${clamp(group.attendance, 0, 100)}%` }} />
               </div>
-              <strong className="sf-mono">{group.attendance}%</strong>
+              <strong className="sf-mono">{hasAttendance ? `${group.attendance}%` : '—'}</strong>
             </div>
-            <div className={styles.groupCards}>
-              <span>↑{group.up}</span>
-              <span>↓{group.down}</span>
+            <div className={styles.groupCycle}>
+              <strong>{t('today.monthShort')} {group.studyMonth || '—'}</strong>
+              <span>{group.completedInCycle}/{group.cycleLength || '—'} {t('today.lessonsShort')}</span>
             </div>
             <Icon name="chevR" size={14} />
           </button>

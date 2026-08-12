@@ -3,6 +3,7 @@ import { Palette } from '@/domain/enums.js';
 import { ThemeContext } from './contexts.js';
 
 const STORAGE_KEY = 'sf-theme';
+const DENSITY_STORAGE_KEY = 'sf-density';
 const DEFAULT = { palette: Palette.SAROY, dark: false };
 
 function readStored() {
@@ -28,6 +29,14 @@ export function ThemeProvider({ children }) {
     const root = document.documentElement;
     root.setAttribute('data-palette', theme.palette);
     root.setAttribute('data-theme', theme.dark ? 'dark' : 'light');
+    try {
+      root.setAttribute(
+        'data-density',
+        localStorage.getItem(DENSITY_STORAGE_KEY) === 'dense' ? 'dense' : 'comfortable',
+      );
+    } catch {
+      root.setAttribute('data-density', 'comfortable');
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
     } catch {

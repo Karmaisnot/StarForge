@@ -278,6 +278,14 @@ export class MockTaskRepository extends ITaskRepository {
   listFilters() {
     return respond(taskFiltersFixture);
   }
+  listTargets() {
+    return respond({
+      people: [{ key: 'teacher:1', kind: 'teacher', id: 1, name: 'Me', role: 'Teacher', self: true }],
+      departments: [],
+      branches: [],
+      canBroadAssign: false,
+    });
+  }
   setState(id, state) {
     const task = this.#tasks.find((t) => t.id === id);
     if (task) task.state = state;
@@ -324,6 +332,10 @@ export class MockTaskRepository extends ITaskRepository {
     };
     this.#tasks.unshift(task);
     return respond(task);
+  }
+  async createMany(draft) {
+    const targets = Array.isArray(draft.targets) && draft.targets.length ? draft.targets : [null];
+    return Promise.all(targets.map((target) => this.create({ ...draft, target })));
   }
 }
 
@@ -483,12 +495,20 @@ export class MockSurveyRepository extends ISurveyRepository {
   #active = clone(activeSurveysFixture);
   #history = clone(surveyHistoryFixture);
   #drafts = clone(surveyDraftsFixture);
+  #managed = [];
+
+  getCapabilities() {
+    return respond({ canCreate: true });
+  }
 
   listActive() {
     return respond(this.#active);
   }
   listHistory() {
     return respond(this.#history);
+  }
+  listManaged() {
+    return respond(this.#managed);
   }
   getDetail(id) {
     const survey = this.#active.find((candidate) => String(candidate.id) === String(id));
@@ -539,6 +559,52 @@ export class MockSurveyRepository extends ISurveyRepository {
     }
     return respond({ id, skipped: true });
   }
+  create(input) {
+    const id = `form-${Date.now()}`;
+    const form = {
+      id,
+      title: input.title,
+      description: input.description ?? '',
+      issuer: 'You',
+      status: input.publishNow ? 'published' : 'draft',
+      anonymous: Boolean(input.anonymous),
+      allowMultiple: Boolean(input.allowMultiple),
+      remaining: input.closesAt || '—',
+      fields: clone(input.fields ?? []),
+    };
+    this.#managed.unshift(form);
+    return respond(form);
+  }
+  publish(id) {
+    const form = this.#managed.find((candidate) => String(candidate.id) === String(id));
+    if (form) form.status = 'published';
+    return respond(form);
+  }
+  close(id) {
+    const form = this.#managed.find((candidate) => String(candidate.id) === String(id));
+    if (form) form.status = 'closed';
+    return respond(form);
+  }
+  remove(id) {
+    this.#managed = this.#managed.filter((candidate) => String(candidate.id) !== String(id));
+    return respond({ id, removed: true });
+  }
+  getResults(id) {
+    const form = this.#managed.find((candidate) => String(candidate.id) === String(id));
+    return respond({
+      form,
+      summary: {
+        response_count: 0,
+        fields: (form?.fields ?? []).map((field, index) => ({
+          field: field.id ?? index,
+          label: field.label,
+          field_type: field.type,
+          summary: { answered: 0 },
+        })),
+      },
+      responses: [],
+    });
+  }
 }
 
 function firstAnswer(answers, type) {
@@ -551,6 +617,17 @@ export class MockMgmtRepository extends IMgmtRepository {
 
   listThreads() {
     return respond(this.#threads);
+  }
+  listContacts() {
+    return respond(this.#threads.map((thread) => ({
+      key: `person-${thread.id}`,
+      threadId: thread.id,
+      participantIds: [thread.id],
+      name: thread.name,
+      role: thread.role,
+      kind: thread.channel ? 'group' : 'staff',
+      online: thread.online,
+    })));
   }
   getTranscript(threadId) {
     return respond(this.#transcripts[threadId] ?? []);
@@ -565,6 +642,12 @@ export class MockMgmtRepository extends IMgmtRepository {
       thread.time = 'now';
     }
     return respond(message);
+  }
+  sendAttachment(threadId, file, body = '') {
+    return this.sendMessage(threadId, body || `[${file?.name || 'Attachment'}]`);
+  }
+  downloadAttachment(_threadId, key) {
+    return respond({ url: String(key || '') });
   }
   createThread({ name, message }) {
     const id = Math.max(0, ...this.#threads.map((thread) => Number(thread.id) || 0)) + 1;
@@ -646,6 +729,11 @@ export class MockMaterialRepository extends IMaterialRepository {
   getStorage() {
     return respond(materialStorageFixture);
   }
+  listTargets() {
+    return respond([
+      { key: 'group:1', label: 'My group', detail: 'Group library', folderIds: [1], audience: 'own_students' },
+    ]);
+  }
   create(input) {
     const material = {
       id: `material-${Date.now()}`,
@@ -658,6 +746,9 @@ export class MockMaterialRepository extends IMaterialRepository {
     };
     this.#materials.unshift(material);
     return respond(material);
+  }
+  download(id) {
+    return respond({ id, url: '#mock-download' });
   }
   remove(id) {
     this.#materials = this.#materials.filter((material) => material.id !== id);

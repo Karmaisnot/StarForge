@@ -13,6 +13,9 @@ export class TaskService {
   getFilters() {
     return this.taskRepo.listFilters();
   }
+  getTargets() {
+    return this.taskRepo.listTargets();
+  }
   setState(id, state) {
     return this.taskRepo.setState(id, state);
   }
@@ -27,5 +30,8 @@ export class TaskService {
    */
   create(draft) {
     return this.taskRepo.create(draft);
+  }
+  createMany(draft) {
+    return this.taskRepo.createMany(draft);
   }
 }

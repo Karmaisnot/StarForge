@@ -6,12 +6,21 @@ export class MgmtService {
   getThreads() {
     return this.mgmtRepo.listThreads();
   }
+  getContacts() {
+    return this.mgmtRepo.listContacts();
+  }
   getTranscript(threadId) {
     return this.mgmtRepo.getTranscript(threadId);
   }
   /** @param {number|string} threadId @param {string} text @returns {Promise<object>} created message */
   sendMessage(threadId, text) {
     return this.mgmtRepo.sendMessage(threadId, text);
+  }
+  sendAttachment(threadId, file, body = '') {
+    return this.mgmtRepo.sendAttachment(threadId, file, body);
+  }
+  downloadAttachment(threadId, key) {
+    return this.mgmtRepo.downloadAttachment(threadId, key);
   }
   /** @param {{name:string,message:string}} input @returns {Promise<object>} created thread */
   createThread(input) {

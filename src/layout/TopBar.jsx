@@ -29,8 +29,10 @@ export function TopBar({
   const navigate = useNavigate();
   const { t } = useT();
   const { dark, toggleDark } = useTheme();
-  const showAi =
-    DATA_SOURCE !== 'remote' ? teacher?.roleKey === 'teacher' : canAccess(teacher, 'ai_app');
+  // AI is not a teacher workspace. Keeping this false for the live app also
+  // prevents a permission inherited from a broad account type from leaking a
+  // developer-oriented shortcut into the teacher shell.
+  const showAi = DATA_SOURCE !== 'remote' && teacher?.roleKey === 'teacher';
   const showNotifications = DATA_SOURCE !== 'remote' || canAccess(teacher, 'notifications');
   const roleLabel = teacher?.role || (teacher?.accountKind === 'teacher' ? 'Teacher' : 'Staff');
   const accountPath = DATA_SOURCE === 'remote' ? '/account/profile' : '/settings';

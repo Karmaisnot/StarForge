@@ -169,4 +169,23 @@ describe('opaque browser-session auth contract', () => {
     expect(session.status).toBe('forbidden');
     expect(session.user.principal_kind).toBe('staff');
   });
+
+  it('clears the current browser session immediately while logout is still in flight', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(envelope({ csrf_token: 'bootstrap-csrf' })))
+      .mockResolvedValueOnce(response(envelope({ must_change_password: false })))
+      .mockResolvedValueOnce(response(envelope(staffIdentity())))
+      .mockResolvedValueOnce(response(envelope({ features: [] })));
+    await auth.login({ username: 'nigora.karimova', password: 'demo1234' });
+
+    let finishLogout;
+    fetchMock.mockImplementationOnce(
+      () => new Promise((resolve) => { finishLogout = () => resolve(response(envelope({}))); }),
+    );
+    const pending = auth.logout();
+
+    expect(auth.getSessionSnapshot().status).toBe('anonymous');
+    finishLogout();
+    await pending;
+  });
 });

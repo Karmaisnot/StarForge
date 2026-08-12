@@ -68,6 +68,28 @@ function broadcast(key, reason) {
   }
 }
 
+function clearLocalSession({ reason = 'signed-out', failure = null } = {}) {
+  hydrationRequest = null;
+  resetHttpSessionPolicy();
+  removeLegacyCredentials();
+  try {
+    sessionStorage.removeItem(DEVICE_KEY);
+  } catch {
+    // The in-memory transition still completes when browser storage is blocked.
+  }
+  setSessionSnapshot(
+    failure
+      ? {
+          status: 'signout-unconfirmed',
+          error: failure,
+          reason: 'Private data was cleared, but the server could not confirm sign-out.',
+        }
+      : { status: 'anonymous' },
+    reason,
+  );
+  broadcast(LOGOUT_SIGNAL_KEY, failure ? 'unconfirmed' : 'confirmed');
+}
+
 function normalizedRoleLabel(value) {
   return String(value ?? '')
     .trim()
@@ -267,37 +289,32 @@ export async function changePassword({ currentPassword, newPassword }) {
   return next;
 }
 
-/** Revoke the current server session before clearing all private UI state. */
+/** End the current session and clear private UI state without waiting on the network. */
 export async function logout() {
-  let failure = null;
-  try {
-    await httpClient.post('auth/logout/', undefined, {
+  const revocation = httpClient.post('auth/logout/', undefined, {
       timeout: 4_000,
       invalidateOnUnauthorized: false,
-    });
+  });
+  // The request has already captured the HttpOnly cookie. Drop every private
+  // client view now so a current-device sign-out never leaves the workspace
+  // visible while the network response is in flight.
+  clearLocalSession({ reason: 'signed-out' });
+  let failure = null;
+  try {
+    await revocation;
   } catch (error) {
     if (error?.status !== 401) failure = error;
   }
-  hydrationRequest = null;
-  resetHttpSessionPolicy();
-  removeLegacyCredentials();
-  try {
-    sessionStorage.removeItem(DEVICE_KEY);
-  } catch {
-    // The in-memory transition still completes.
-  }
-  setSessionSnapshot(
-    failure
-      ? {
-          status: 'signout-unconfirmed',
-          error: failure,
-          reason: 'Private data was cleared, but the server could not confirm sign-out.',
-        }
-      : { status: 'anonymous' },
-    failure ? 'signout-unconfirmed' : 'signed-out',
-  );
-  broadcast(LOGOUT_SIGNAL_KEY, failure ? 'unconfirmed' : 'confirmed');
   if (failure) throw failure;
+}
+
+/**
+ * Finish a current-session revocation performed by the session register.
+ * The server has already invalidated the credential and cleared its cookie;
+ * this synchronously drops every private client-side view and informs tabs.
+ */
+export function finalizeCurrentSessionRevocation() {
+  clearLocalSession({ reason: 'current-session-revoked' });
 }
 
 if (typeof window !== 'undefined') {

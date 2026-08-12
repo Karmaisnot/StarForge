@@ -17,7 +17,19 @@ import {
   WorkspaceTable,
 } from '../components/WorkspacePrimitives.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { changePassword, hydrateSession } from '@/data/http/authToken.js';
+import {
+  changePassword,
+  hydrateSession,
+  logout,
+} from '@/data/http/authToken.js';
+import { ThemeControls } from '@/layout/ThemeSwitcher.jsx';
+import { useServices } from '@/hooks/useServices.js';
+import { useT } from '@/hooks/useT.js';
+import {
+  DASHBOARD_WIDGET_KEYS,
+  readDashboardHiddenWidgets,
+  saveDashboardHiddenWidgets,
+} from '@/features/today/dashboardPreferences.js';
 import { useWorkspaceData, workspaceRoute } from '../hooks/useWorkspaceData.js';
 import { formatGender, formatOrganizationDate } from '../lib/formatters.js';
 import {
@@ -46,6 +58,7 @@ const NOTIFICATION_EVENTS = Object.freeze([
   ['assignments.created', 'New assignments', 'Learning'],
   ['assignments.due_soon', 'Assignments due soon', 'Learning'],
   ['assignments.graded', 'Assignments graded', 'Learning'],
+  ['task.assigned', 'A task is assigned to me', 'Tasks'],
   ['schedule.lesson_reminder', 'Upcoming lesson reminders', 'Schedule'],
   ['schedule.cycle_exam_reminder', 'Cycle exam reminders', 'Schedule'],
   ['cohorts.announcement', 'Group announcements', 'Groups'],
@@ -121,7 +134,7 @@ function ProfileSection({ profile, onNav, readOnly = false }) {
         ? <StatusPill value="View only" tone="warn" />
         : editing
           ? <ActionButton onClick={() => setEditing(false)}>Cancel</ActionButton>
-          : <ActionButton tone="primary" icon={Icons.user} onClick={() => setEditing(true)}>Edit profile</ActionButton>}<LinkButton to="settings" onNav={onNav} icon={Icons.settings}>Workspace preferences</LinkButton></>}
+          : <ActionButton tone="primary" icon={Icons.user} onClick={() => setEditing(true)}>Edit profile</ActionButton>}<LinkButton to="account/workspace" onNav={onNav} icon={Icons.settings}>Workspace preferences</LinkButton></>}
     />
     {editing && !readOnly ? <form className="account-profile-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
       <header><div><span>Personal details</span><h2>Keep your staff profile current</h2><p>These details are used for attribution, communication, teaching, and accountable actions.</p></div></header>
@@ -224,9 +237,17 @@ function SessionsSection({ readOnly = false }) {
   const [pendingRevocation, setPendingRevocation] = useState(null);
   const toast = useToast();
   const revoke = useMutation({
-    mutationFn: (sessionId) => httpRequest('DELETE', `/api/v1/users/sessions/${sessionId}/`),
-    onSuccess: () => {
+    mutationFn: async (session) => {
+      if (session.current_session) {
+        await logout();
+        return session;
+      }
+      await httpRequest('DELETE', `/api/v1/users/sessions/${session.id}/`);
+      return session;
+    },
+    onSuccess: (session) => {
       setPendingRevocation(null);
+      if (session.current_session) return;
       sessions.retry();
       toast.success('The other sign-in has been ended.');
     },
@@ -238,7 +259,7 @@ function SessionsSection({ readOnly = false }) {
   const description = readOnly
     ? 'Review coarse device and browser labels from the authenticated session register. Sign in directly to end another session.'
     : 'Review coarse device and browser labels from the authenticated session register. End an unfamiliar sign-in without exposing its credential.';
-  return <WorkspaceState state={sessions} empty={!sessions.rows.length} emptyTitle="No active sign-ins" emptyBody="Active browser and mobile sessions appear here without exposing credentials, network addresses, or full device fingerprints."><DetailSection eyebrow="Session security" title="Active sign-ins" description={description}><WorkspaceTable label="Active sign-ins" rows={sessions.rows} columns={[
+  return <WorkspaceState state={sessions} empty={!sessions.rows.length} emptyTitle="No active sign-ins" emptyBody="Your active browser and mobile sign-ins will appear here."><DetailSection className="account-sessions" eyebrow="Your devices" title="Active sign-ins" description={description}><WorkspaceTable label="Active sign-ins" rows={sessions.rows} rowClassName={(row) => row.current_session ? 'is-current-session' : ''} columns={[
     { key: 'device', label: 'Device' },
     { key: 'browser', label: 'Browser' },
     { key: 'platform', label: 'Platform', render: (row) => <StatusPill value={row.platform} /> },
@@ -247,13 +268,11 @@ function SessionsSection({ readOnly = false }) {
     { key: 'policy', label: 'Policy', render: (row) => row.current_session
       ? <StatusPill value={row.read_only || readOnly ? 'Current · view only' : 'Current session'} tone={row.read_only || readOnly ? 'warn' : 'success'} />
       : row.read_only ? <StatusPill value="View only" tone="warn" /> : 'Standard' },
-    { key: 'revoke', label: 'Actions', render: (row) => row.current_session
-      ? 'Current sign-in'
-      : readOnly
+    { key: 'revoke', label: 'Actions', render: (row) => readOnly && !row.current_session
         ? 'View only'
         : String(pendingRevocation) === String(row.id)
-          ? <span className="fw-row-actions"><ActionButton icon={Icons.x} tone="ghost" title="Keep sign-in" aria-label="Keep sign-in" disabled={revoke.isPending} onClick={() => setPendingRevocation(null)}><span className="fw-sr">Cancel</span></ActionButton><ActionButton icon={Icons.logout} tone="danger" title="Confirm end sign-in" aria-label="Confirm end sign-in" disabled={revoke.isPending} onClick={() => revoke.mutate(row.id)}><span className="fw-sr">{revoke.isPending ? 'Ending sign-in' : 'Confirm end sign-in'}</span></ActionButton></span>
-          : <ActionButton icon={Icons.logout} tone="ghost" title="End sign-in" disabled={revoke.isPending} onClick={() => setPendingRevocation(row.id)} aria-label={`End ${row.device || 'other'} sign-in`}><span className="fw-sr">End sign-in</span></ActionButton> },
+          ? <span className="fw-row-actions"><ActionButton icon={Icons.x} tone="ghost" title="Keep sign-in" aria-label="Keep sign-in" disabled={revoke.isPending} onClick={() => setPendingRevocation(null)}><span className="fw-sr">Cancel</span></ActionButton><ActionButton icon={Icons.logout} tone="danger" title={row.current_session ? 'Confirm sign out' : 'Confirm end sign-in'} aria-label={row.current_session ? 'Confirm sign out of this device' : 'Confirm end sign-in'} disabled={revoke.isPending} onClick={() => revoke.mutate(row)}><span className="fw-sr">{revoke.isPending ? 'Signing out' : row.current_session ? 'Confirm sign out' : 'Confirm end sign-in'}</span></ActionButton></span>
+          : <ActionButton icon={Icons.logout} tone={row.current_session ? 'danger' : 'ghost'} title={row.current_session ? 'Sign out this device' : 'End sign-in'} disabled={revoke.isPending} onClick={() => setPendingRevocation(row.id)} aria-label={row.current_session ? 'Sign out this current device' : `End ${row.device || 'other'} sign-in`}><span className="fw-sr">{row.current_session ? 'Sign out this device' : 'End sign-in'}</span></ActionButton> },
   ]} /></DetailSection></WorkspaceState>;
 }
 
@@ -266,7 +285,7 @@ function DevicesSection({ readOnly = false }) {
     onSuccess: () => { setPendingRemoval(null); devices.retry(); toast.success('The recognized device has been removed.'); },
     onError: (failure) => { setPendingRemoval(null); toast.danger(userFacingError(failure, { fallback: 'The device could not be removed.' })); },
   });
-  return <WorkspaceState state={devices} empty={!devices.rows.length} emptyTitle="No recognized devices" emptyBody="Devices appear here after they register for secure notices."><DetailSection eyebrow="Security" title="Recognized devices" description="Remove a device you no longer use or recognize. This list does not expose any private delivery credential."><WorkspaceTable label="Recognized devices" rows={devices.rows} columns={[
+  return <WorkspaceState state={devices} empty={!devices.rows.length} emptyTitle="No notification devices" emptyBody="Devices appear here after secure notifications are enabled."><DetailSection eyebrow="Notifications" title="Notification devices" description="Choose which recognized devices may receive your secure notifications. Removing one here does not end its sign-in; active sign-ins are managed above."><WorkspaceTable label="Notification devices" rows={devices.rows} columns={[
     { key: 'platform', label: 'Platform', render: (row) => <StatusPill value={row.platform} /> }, { key: 'device_id', label: 'Device identifier' }, { key: 'user_agent', label: 'Browser' },
     { key: 'last_seen_at', label: 'Last seen', render: (row) => formatOrganizationDate(row.last_seen_at) }, { key: 'created_at', label: 'First recognized', render: (row) => formatOrganizationDate(row.created_at) },
     { key: 'remove', label: 'Actions', render: (row) => readOnly ? 'View only' : String(pendingRemoval) === String(row.id)
@@ -285,8 +304,54 @@ function AccessSection({ profile }) {
   ]} /></DetailSection><DetailSection eyebrow="Identity" title="Account status"><DetailGrid columns={3} fields={[{ label: 'Username', value: profile.data.username }, { label: 'Account active', value: <StatusPill value={profile.data.is_active ? 'active' : 'inactive'} /> }, { label: 'Workspace', value: workspaceName }, { label: 'Account type', value: memberships[0]?.account_type_name || 'Staff' }, { label: 'Last sign-in', value: formatOrganizationDate(profile.data.last_login_at) }, { label: 'Memberships', value: memberships.length }]} /></DetailSection></>}</WorkspaceState>;
 }
 
-function WorkspaceSection({ onNav }) {
-  return <section className="account-workspace-link"><span>{cloneElement(Icons.settings, { size: 24 })}</span><div><small>Personal workspace</small><h2>Appearance, language, and information density</h2><p>Choose your navigation layout, theme, color, language, and the amount of information shown on screen.</p><LinkButton to="settings" onNav={onNav} tone="primary">Open workspace preferences</LinkButton></div></section>;
+const DENSITY_STORAGE_KEY = 'sf-density';
+const LANGUAGE_LABELS = Object.freeze({ uz: "O‘zbekcha", ru: 'Русский', en: 'English' });
+
+function readDensity() {
+  try {
+    return localStorage.getItem(DENSITY_STORAGE_KEY) === 'dense' ? 'dense' : 'comfortable';
+  } catch {
+    return 'comfortable';
+  }
+}
+
+function WorkspaceSection() {
+  const { account } = useServices();
+  const { t, locale, locales, setLocale } = useT();
+  const toast = useToast();
+  const [density, setDensity] = useState(readDensity);
+  const [hiddenWidgets, setHiddenWidgets] = useState(readDashboardHiddenWidgets);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-density', density === 'dense' ? 'dense' : 'comfortable');
+    try { localStorage.setItem(DENSITY_STORAGE_KEY, density); } catch { /* Local preferences remain in memory. */ }
+  }, [density]);
+
+  useEffect(() => {
+    saveDashboardHiddenWidgets(hiddenWidgets);
+  }, [hiddenWidgets]);
+
+  const changeLanguage = (next) => {
+    if (next === locale) return;
+    setLocale(next);
+    account.patchSettings({ locale: next }).catch(() => toast.danger(t('common.error')));
+  };
+
+  return <div className="account-preferences">
+    <section className="account-preference-hero">
+      <span>{cloneElement(Icons.settings, { size: 23 })}</span>
+      <div><small>{t('settings.workspaceEyebrow')}</small><h2>{t('settings.workspaceTitle')}</h2><p>{t('settings.workspaceBody')}</p></div>
+    </section>
+    <div className="account-preference-grid">
+      <section className="account-preference-card"><header><span>{cloneElement(Icons.sun, { size: 18 })}</span><div><strong>{t('settings.appearance')}</strong><p>{t('settings.appearanceHint')}</p></div></header><ThemeControls /></section>
+      <section className="account-preference-card"><header><span>{cloneElement(Icons.globe, { size: 18 })}</span><div><strong>{t('settings.language')}</strong><p>{t('settings.languageHint')}</p></div></header><div className="account-choice-list">{locales.map((language) => <button type="button" data-active={locale === language} onClick={() => changeLanguage(language)} key={language}><span>{LANGUAGE_LABELS[language] || language}</span>{locale === language && cloneElement(Icons.check, { size: 16 })}</button>)}</div></section>
+      <section className="account-preference-card"><header><span>{cloneElement(Icons.doc, { size: 18 })}</span><div><strong>{t('settings.density')}</strong><p>{t('settings.densityHint')}</p></div></header><div className="account-density-options"><button type="button" data-active={density === 'comfortable'} onClick={() => setDensity('comfortable')}><i><b /><b /><b /></i><span><strong>{t('settings.comfortable')}</strong><small>{t('settings.comfortableHint')}</small></span></button><button type="button" data-active={density === 'dense'} onClick={() => setDensity('dense')}><i className="is-dense"><b /><b /><b /><b /></i><span><strong>{t('settings.compact')}</strong><small>{t('settings.compactHint')}</small></span></button></div></section>
+      <section className="account-preference-card is-wide"><header><span>{cloneElement(Icons.home, { size: 18 })}</span><div><strong>{t('settings.dashboardWidgets')}</strong><p>{t('settings.dashboardWidgetsHint')}</p></div></header><div className="account-widget-options">{DASHBOARD_WIDGET_KEYS.map((key) => {
+        const visible = !hiddenWidgets[key];
+        return <button type="button" role="switch" aria-checked={visible} data-active={visible} onClick={() => setHiddenWidgets((current) => ({ ...current, [key]: visible }))} key={key}><span>{t(`today.w_${key}`)}</span><i /></button>;
+      })}</div></section>
+    </div>
+  </div>;
 }
 
 export function AccountPage({ route = 'account/profile', onNav, user }) {
@@ -296,5 +361,5 @@ export function AccountPage({ route = 'account/profile', onNav, user }) {
   const active = SECTIONS.some((item) => item.id === section) ? section : 'profile';
   const current = SECTIONS.find((item) => item.id === active);
   const navigation = <SectionNav label="My account" items={SECTIONS} active={active} basePath="account" onNav={onNav} />;
-  return <WorkspaceLayout navigation={navigation}><div className="fw-page account-workspace">{active !== 'profile' && <WorkspaceHeader eyebrow="My account" title={current.label} description={current.description} />}{active === 'profile' && <ProfileSection profile={profile} onNav={onNav} readOnly={readOnly} />}{active === 'notifications' && <NotificationSection readOnly={readOnly} />}{active === 'security' && <><SecuritySection readOnly={readOnly} /><SessionsSection readOnly={readOnly} /></>}{active === 'devices' && <DevicesSection readOnly={readOnly} />}{active === 'access' && <AccessSection profile={profile} />}{active === 'workspace' && <WorkspaceSection onNav={onNav} />}</div></WorkspaceLayout>;
+  return <WorkspaceLayout navigation={navigation}><div className="fw-page account-workspace">{active !== 'profile' && <WorkspaceHeader eyebrow="My account" title={current.label} description={current.description} />}{active === 'profile' && <ProfileSection profile={profile} onNav={onNav} readOnly={readOnly} />}{active === 'notifications' && <NotificationSection readOnly={readOnly} />}{active === 'security' && <SecuritySection readOnly={readOnly} />}{active === 'devices' && <><SessionsSection readOnly={readOnly} /><DevicesSection readOnly={readOnly} /></>}{active === 'access' && <AccessSection profile={profile} />}{active === 'workspace' && <WorkspaceSection />}</div></WorkspaceLayout>;
 }

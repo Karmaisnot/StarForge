@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
 import { Button, Chip, Icon, ProgressBar, StarMark } from '@/ui';
@@ -8,13 +8,18 @@ import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import styles from './surveys.module.css';
+import { FormsDirectory, SurveyResults } from './FormsWorkspace.jsx';
 
 export function SurveysPage() {
   const { surveyId } = useParams();
-  return surveyId ? <SurveyRunner surveyId={surveyId} /> : <SurveyDirectory />;
+  const [searchParams] = useSearchParams();
+  if (surveyId && searchParams.get('view') === 'results') {
+    return <SurveyResults surveyId={surveyId} />;
+  }
+  return surveyId ? <SurveyRunner surveyId={surveyId} /> : <FormsDirectory />;
 }
 
-function SurveyDirectory() {
+export function LegacySurveyDirectory() {
   const { surveys } = useServices();
   const { t, locale } = useT();
   const toast = useToast();

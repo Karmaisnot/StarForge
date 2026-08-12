@@ -52,9 +52,65 @@ function resourceNav(resource) {
 }
 
 const remoteResources = STAFF_RESOURCES.filter((resource) => resource.id !== 'departments').map(resourceNav);
+const remoteResource = (id) => remoteResources.find((item) => item.resourceId === id);
+const compact = (items) => items.filter(Boolean);
+
+// A teacher's product is deliberately smaller than the complete staff
+// contract. Lesson planning, attendance, learning records, and awards are
+// opened from a group/student so context can never drift to another cohort.
+// Operational and leadership consoles remain available to the staff roles
+// that own them, but are not teacher navigation merely because an endpoint is
+// readable.
+const TEACHER_PRIMARY_IDS = new Set([
+  'today',
+  'tasks',
+  'cohorts',
+  'students',
+  'messages',
+  'content',
+  'forms',
+]);
+const TEACHER_SECONDARY_IDS = new Set([
+  'approvals',
+  'recognition',
+  'reports',
+  'printing',
+]);
+export const TEACHER_HIDDEN_RESOURCES = new Set([
+  'schedule',
+  'attendance',
+  'academics',
+  'assignments',
+  'placement',
+  'ai',
+  'organization',
+  'operations',
+  'intelligence',
+  'meetings',
+  'notifications',
+  'compliance',
+]);
+
+export function isTeacherWorkspace(profile) {
+  const kind = String(profile?.accountKind ?? '').toLowerCase();
+  const role = String(profile?.roleKey ?? '').toLowerCase();
+  return kind === 'teacher' || role === 'teacher';
+}
+
 const REMOTE_PRIMARY_NAV = [
   { id: 'today', path: '/today', label: 'Today', icon: 'home', access: 'staff' },
-  ...remoteResources.filter((item) => ['students', 'cohorts', 'schedule', 'attendance', 'academics', 'assignments'].includes(item.resourceId)),
+  ...compact([
+    remoteResource('tasks'),
+    remoteResource('cohorts'),
+    remoteResource('students'),
+    remoteResource('messaging'),
+    remoteResource('content'),
+    remoteResource('forms'),
+    remoteResource('schedule'),
+    remoteResource('attendance'),
+    remoteResource('academics'),
+    remoteResource('assignments'),
+  ]),
 ];
 const REMOTE_SECONDARY_NAV = [
   ...remoteResources.filter((item) => !REMOTE_PRIMARY_NAV.some((primary) => primary.resourceId === item.resourceId)),
@@ -82,6 +138,10 @@ export const ALL_NAV = [...PRIMARY_NAV, ...SECONDARY_NAV, ACCOUNT_NAV, SETTINGS_
 
 export function visibleNav(items, profile) {
   return items.filter((item) => {
+    if (DATA_SOURCE === 'remote' && isTeacherWorkspace(profile)) {
+      const allowed = TEACHER_PRIMARY_IDS.has(item.id) || TEACHER_SECONDARY_IDS.has(item.id);
+      if (!allowed) return false;
+    }
     if (item.access === 'staff') return isStaffProfile(profile);
     if (item.permissions) {
       return item.permissions.some((permission) => canAccess(profile, permission));
@@ -134,6 +194,13 @@ export function accessForPath(pathname) {
 
 export function profileCanOpen(item, profile) {
   if (item?.denied) return false;
+  if (
+    DATA_SOURCE === 'remote' &&
+    isTeacherWorkspace(profile) &&
+    TEACHER_HIDDEN_RESOURCES.has(item?.resourceId)
+  ) {
+    return false;
+  }
   if (item?.access === 'staff') return isStaffProfile(profile);
   if (item?.permissions) {
     return item.permissions.some((permission) => canAccess(profile, permission));

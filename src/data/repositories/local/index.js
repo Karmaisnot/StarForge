@@ -100,6 +100,9 @@ export class LocalTaskRepository extends ITaskRepository {
   listFilters() {
     return httpClient.get('tasks/filters');
   }
+  listTargets() {
+    return httpClient.get('tasks/targets');
+  }
   setState(id, state) {
     return httpClient.patch(`tasks/${segment(id)}/state`, { state });
   }
@@ -108,6 +111,10 @@ export class LocalTaskRepository extends ITaskRepository {
   }
   create(draft) {
     return httpClient.post('tasks', draft);
+  }
+  async createMany(draft) {
+    const targets = Array.isArray(draft.targets) && draft.targets.length ? draft.targets : [null];
+    return Promise.all(targets.map((target) => this.create({ ...draft, target })));
   }
 }
 
@@ -154,11 +161,17 @@ export class LocalPrintRepository extends IPrintRepository {
 }
 
 export class LocalSurveyRepository extends ISurveyRepository {
+  getCapabilities() {
+    return Promise.resolve({ canCreate: false });
+  }
   listActive() {
     return httpClient.get('surveys/active');
   }
   listHistory() {
     return httpClient.get('surveys/history');
+  }
+  listManaged() {
+    return Promise.resolve([]);
   }
   getDetail(id) {
     return httpClient.get(`surveys/${segment(id)}`);
@@ -172,9 +185,27 @@ export class LocalSurveyRepository extends ISurveyRepository {
   skip(id) {
     return httpClient.post(`surveys/${segment(id)}/skip`, {});
   }
+  create(input) {
+    return httpClient.post('surveys', input);
+  }
+  publish(id) {
+    return httpClient.post(`surveys/${segment(id)}/publish`, {});
+  }
+  close(id) {
+    return httpClient.post(`surveys/${segment(id)}/close`, {});
+  }
+  remove(id) {
+    return httpClient.delete(`surveys/${segment(id)}`);
+  }
+  getResults(id) {
+    return httpClient.get(`surveys/${segment(id)}/results`);
+  }
 }
 
 export class LocalMgmtRepository extends IMgmtRepository {
+  listContacts() {
+    return httpClient.get('mgmt/contacts');
+  }
   listThreads() {
     return httpClient.get('mgmt/threads');
   }
@@ -183,6 +214,15 @@ export class LocalMgmtRepository extends IMgmtRepository {
   }
   sendMessage(threadId, text) {
     return httpClient.post(`mgmt/threads/${segment(threadId)}/messages`, { text });
+  }
+  sendAttachment(threadId, file, body = '') {
+    const upload = new FormData();
+    upload.append('file', file);
+    upload.append('body', body);
+    return httpClient.post(`mgmt/threads/${segment(threadId)}/attachments`, upload);
+  }
+  downloadAttachment(threadId, key) {
+    return httpClient.get(`mgmt/threads/${segment(threadId)}/attachments/${segment(key)}`);
   }
   createThread(input) {
     return httpClient.post('mgmt/threads', input);
@@ -223,8 +263,14 @@ export class LocalMaterialRepository extends IMaterialRepository {
   getStorage() {
     return httpClient.get('materials/storage');
   }
+  listTargets() {
+    return httpClient.get('materials/targets');
+  }
   create(input) {
     return httpClient.post('materials', input);
+  }
+  download(id) {
+    return httpClient.get(`materials/${segment(id)}/download`);
   }
   remove(id) {
     return httpClient.delete(`materials/${segment(id)}`);

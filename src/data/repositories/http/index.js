@@ -43,6 +43,8 @@ const COPY = {
     review: 'Tekshirishda',
     done: 'Tugallangan',
     me: 'Men',
+    assignedToMe: 'Menga berilgan',
+    createdByMe: 'Men yaratgan',
     teacher: 'O‘qituvchi',
     branch: 'Filial',
     group: 'guruh',
@@ -63,6 +65,8 @@ const COPY = {
     form: 'So‘rovnoma',
     files: 'fayl',
     queued: 'Navbatda',
+    allStudents: 'Barcha o‘quvchilarim',
+    entireCenter: 'Butun ta’lim markazi',
   },
   ru: {
     all: 'Все',
@@ -73,6 +77,8 @@ const COPY = {
     review: 'На проверке',
     done: 'Готово',
     me: 'Я',
+    assignedToMe: 'Назначено мне',
+    createdByMe: 'Создано мной',
     teacher: 'Преподаватель',
     branch: 'Филиал',
     group: 'групп',
@@ -93,6 +99,8 @@ const COPY = {
     form: 'Опрос',
     files: 'файлов',
     queued: 'В очереди',
+    allStudents: 'Все мои ученики',
+    entireCenter: 'Весь учебный центр',
   },
   en: {
     all: 'All',
@@ -103,6 +111,8 @@ const COPY = {
     review: 'In review',
     done: 'Done',
     me: 'Me',
+    assignedToMe: 'Assigned to me',
+    createdByMe: 'Created by me',
     teacher: 'Teacher',
     branch: 'Branch',
     group: 'groups',
@@ -123,6 +133,8 @@ const COPY = {
     form: 'Form',
     files: 'files',
     queued: 'Queued',
+    allStudents: 'All my students',
+    entireCenter: 'Entire education center',
   },
 };
 
@@ -340,6 +352,19 @@ function mapRosterMember(member, attendanceByStudent) {
 }
 
 function mapTask(task) {
+  const session = getSessionSnapshot().user ?? {};
+  const principalKind = session.principal_kind ?? session.account_kind ?? '';
+  const principalId = session.id;
+  const assignee = task.assignee_principal ?? null;
+  const creator = task.created_by ?? null;
+  const isMine =
+    assignee != null &&
+    assignee.kind === principalKind &&
+    String(assignee.id) === String(principalId);
+  const createdByMe =
+    creator != null &&
+    creator.kind === principalKind &&
+    String(creator.id) === String(principalId);
   const status =
     {
       open: 'todo',
@@ -360,16 +385,18 @@ function mapTask(task) {
     title: task.title ?? '',
     priority,
     state: status,
-    project:
-      task.department_name ||
-      (task.department ? `${copy().branch} #${task.department}` : copy().all),
+    project: task.department_name || task.branch_name || (assignee?.display_name ?? copy().me),
     projectColor: task.priority === 'urgent' ? 'var(--sf-danger)' : 'var(--sf-primary)',
     deadline: formatDeadline(task.due_at),
     urgent: task.priority === 'urgent',
-    fromMgmt: Boolean(task.created_by && task.assignee && task.created_by !== task.assignee),
+    fromMgmt: Boolean(creator && !createdByMe),
     subtasks: null,
-    assigner: task.assignee ? `#${task.assignee}` : copy().me,
-    mine: false,
+    assigner: task.created_by_name || creator?.display_name || copy().me,
+    recipient: task.assignee_name || assignee?.display_name || task.department_name || task.branch_name || '—',
+    description: task.description ?? '',
+    deadlineAt: task.due_at ?? null,
+    mine: isMine,
+    createdByMe,
   };
 }
 
@@ -397,7 +424,8 @@ function taskFilters(tasks) {
   const count = (predicate) => tasks.filter(predicate).length;
   return [
     { key: 'all', label: copy().all, count: tasks.length },
-    { key: 'mine', label: copy().me, count: count((task) => task.mine) },
+    { key: 'mine', label: copy().assignedToMe ?? copy().me, count: count((task) => task.mine) },
+    { key: 'created', label: copy().createdByMe ?? copy().me, count: count((task) => task.createdByMe) },
     { key: 'mgmt', label: 'Management', count: count((task) => task.fromMgmt) },
     { key: 'urgent', label: 'P1', count: count((task) => task.urgent) },
     { key: 'done', label: copy().done, count: count((task) => task.state === 'done') },
@@ -529,13 +557,32 @@ function mapForm(form) {
   return {
     id: String(form.id),
     title: form.title || copy().form,
-    issuer: form.created_by ? `#${form.created_by}` : '—',
+    issuer: form.created_by?.display_name || form.created_by?.account_label || 'StarForge EDU',
     deadline,
     remaining: close ? formatDate(form.closes_at, { day: '2-digit', month: 'short' }) : '—',
     questions,
     estimate: '—',
     progress: 0,
     urgent: remainingMs >= 0 && remainingMs < 3 * 24 * 60 * 60 * 1000,
+    submitted: Boolean(form.response_submitted),
+  };
+}
+
+function mapManagedForm(form) {
+  return {
+    ...mapForm(form),
+    description: form.description || '',
+    status: form.status || 'draft',
+    anonymous: Boolean(form.is_anonymous),
+    allowMultiple: Boolean(form.allow_multiple),
+    branchId: form.branch,
+    opensAt: form.opens_at,
+    closesAt: form.closes_at,
+    createdAt: form.created_at,
+    audienceRoles: asList(form.audience_roles),
+    audienceUserIds: asList(form.audience_user_ids),
+    fields: asList(form.form_fields),
+    canManage: Object.hasOwn(form, 'audience_roles'),
   };
 }
 
@@ -567,26 +614,71 @@ function mapFormQuestion(field, index) {
   };
 }
 
-function mapThread(thread) {
+function messagingContactKind(contact) {
+  if (contact.category === 'student') return 'student';
+  if (contact.category === 'parent') return 'parent';
+  const role = String(contact.role_slug || contact.role_label || '').toLowerCase();
+  return /(ceo|director|manager|head|owner|coordinator)/.test(role) ? 'management' : 'staff';
+}
+
+function mapMessagingContact(contact) {
+  const kind = messagingContactKind(contact);
+  return {
+    key: `person-${contact.user_id}`,
+    userId: contact.user_id,
+    participantIds: [contact.user_id],
+    profileId: contact.profile_id,
+    principalKind: contact.principal_kind,
+    name: contact.display_name || contact.username,
+    username: contact.username,
+    role: contact.role_label || kind,
+    kind,
+    online: Boolean(contact.recently_active),
+    groupId: contact.cohort_id,
+    groupName: contact.cohort_name || '',
+    profileType: contact.role_label || kind,
+  };
+}
+
+function mapThread(thread, contactsByUser = new Map(), currentUserId = null) {
+  const participantIds = asList(thread.participants)
+    .map((participant) => participant.user)
+    .filter((id) => String(id) !== String(currentUserId));
+  const contacts = participantIds.map((id) => contactsByUser.get(String(id))).filter(Boolean);
+  const group = participantIds.length > 1;
+  const direct = !group ? contacts[0] : null;
+  const name = thread.subject || direct?.name || `${copy().thread} #${thread.id}`;
   return {
     id: String(thread.id),
-    name: thread.subject || `${copy().thread} #${thread.id}`,
+    contactKey: direct?.key,
+    name,
     lead: false,
-    role: copy().thread,
+    role: group ? `${participantIds.length + 1} members` : direct?.role || copy().thread,
     lastMessage: '',
     time: formatTime(thread.last_message_at ?? thread.created_at),
     unread: toNumber(thread.unread_count),
-    online: false,
+    online: Boolean(direct?.online),
     pinned: false,
-    channel: false,
+    channel: group,
+    kind: group ? 'group' : direct?.kind || 'staff',
+    persisted: true,
+    memberCount: participantIds.length + 1,
+    participantIds,
+    notificationsMuted: Boolean(thread.notifications_muted),
+    archived: Boolean(thread.archived),
   };
 }
 
 function mapMessage(message, currentUserId) {
+  const attachments = asList(message.attachments).map((key) => ({
+    key,
+    name: decodeURIComponent(String(key).split('/').at(-1) || 'Attachment'),
+  }));
   return {
     id: String(message.id),
     dir: String(message.sender) === String(currentUserId) ? 'out' : 'in',
     text: message.body ?? '',
+    attachments,
     time: formatTime(message.created_at),
     read: false,
   };
@@ -621,6 +713,11 @@ function mapMaterial(file) {
     views: toNumber(file.view_count),
     date: formatDate(file.created_at, { day: '2-digit', month: 'short' }),
     aiSummary: false,
+    status: file.status ?? 'pending',
+    downloadable: file.is_downloadable !== false,
+    audience: file.submission_audience ?? '',
+    destination: file.cohort_name || file.library_name || file.folder_name || '—',
+    uploadedBy: file.uploaded_by_name || '—',
   };
 }
 
@@ -970,6 +1067,84 @@ export class HttpTaskRepository extends ITaskRepository {
     return taskFilters(await this.list());
   }
 
+  async listTargets() {
+    const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    const self = {
+      key: `${me.principal_kind}:${me.id}`,
+      kind: me.principal_kind,
+      id: me.id,
+      name: displayName(me),
+      role: me.role_memberships?.[0]?.account_type_name || copy().me,
+      self: true,
+    };
+    if (me.principal_kind === 'teacher') {
+      const cohorts = asList(await httpClient.get('cohorts/?page_size=100'));
+      const assistants = new Map();
+      for (const cohort of cohorts) {
+        for (const assignment of asList(cohort.teachers ?? cohort.co_teachers)) {
+          if (
+            assignment.teacher_type_slug !== 'assistant' ||
+            String(assignment.teacher) === String(me.id)
+          ) {
+            continue;
+          }
+          assistants.set(String(assignment.teacher), {
+            key: `teacher:${assignment.teacher}`,
+            kind: 'teacher',
+            id: assignment.teacher,
+            name: assignment.teacher_name || `${copy().teacher} #${assignment.teacher}`,
+            role: assignment.teacher_type_name || 'Assistant teacher',
+            assistant: true,
+            cohort: cohort.name,
+          });
+        }
+      }
+      return {
+        people: [self, ...assistants.values()],
+        departments: [],
+        branches: [],
+        canBroadAssign: false,
+      };
+    }
+
+    const [staff, teachers, departments, branches] = await Promise.all([
+      optional(() => httpClient.get('org/staff/?page_size=100').then(asList), []),
+      optional(() => httpClient.get('teachers/?page_size=100').then(asList), []),
+      optional(() => httpClient.get('org/departments/?page_size=100').then(asList), []),
+      optional(() => httpClient.get('org/branches/?page_size=100').then(asList), []),
+    ]);
+    const people = new Map([[self.key, self]]);
+    for (const person of staff) {
+      people.set(`staff:${person.id}`, {
+        key: `staff:${person.id}`,
+        kind: 'staff',
+        id: person.id,
+        name: displayName(person),
+        role: person.account_type_name || person.position || 'Staff',
+      });
+    }
+    for (const person of teachers) {
+      people.set(`teacher:${person.id}`, {
+        key: `teacher:${person.id}`,
+        kind: 'teacher',
+        id: person.id,
+        name: displayName(person),
+        role: person.department_name || copy().teacher,
+      });
+    }
+    return {
+      people: [...people.values()],
+      departments: departments.map((item) => ({
+        key: `department:${item.id}`,
+        id: item.id,
+        name: item.name,
+        branch: item.branch_name || '',
+      })),
+      branches: branches.map((item) => ({ key: `branch:${item.id}`, id: item.id, name: item.name })),
+      canBroadAssign: true,
+    };
+  }
+
   async setState(id, state) {
     return mapTask(
       await httpClient.post(`tasks/${id}/transition/`, { status: apiTaskStatus(state) }),
@@ -983,17 +1158,34 @@ export class HttpTaskRepository extends ITaskRepository {
   }
 
   async create(draft) {
-    return mapTask(
-      await httpClient.post('tasks/', {
-        title: draft.title,
-        priority: apiTaskPriority(draft.priority),
-      }),
-    );
+    const target = draft.target ?? null;
+    const body = {
+      title: draft.title,
+      description: draft.description ?? '',
+      priority: apiTaskPriority(draft.priority),
+      due_at: draft.deadlineAt ?? null,
+    };
+    if (target?.kind === 'staff' || target?.kind === 'teacher') {
+      body.assignee_principal = { kind: target.kind, id: Number(target.id) };
+    } else if (target?.kind === 'department') {
+      body.department = Number(target.id);
+    } else if (target?.kind === 'branch') {
+      body.branch = Number(target.id);
+    } else {
+      const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+      body.assignee_principal = { kind: me.principal_kind, id: Number(me.id) };
+    }
+    return mapTask(await httpClient.post('tasks/', body));
+  }
+
+  async createMany(draft) {
+    const targets = Array.isArray(draft.targets) && draft.targets.length ? draft.targets : [null];
+    return Promise.all(targets.map((target) => this.create({ ...draft, target })));
   }
 }
 
 export class LegacyHttpDashboardRepository extends IDashboardRepository {
-  async getToday() {
+  async getToday(range = '7d') {
     const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
     const profile = mapTeacher(me);
     const [rawTasks, rawMeetings, rawRequests, rawUnread] = await Promise.all([
@@ -1013,7 +1205,10 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
     // This endpoint is only installed for teacher account types. Staff such as a
     // Director receive a lean but complete dashboard instead of a 404 page.
     const dashboard = hasTeacherMembership(me)
-      ? await optional(() => httpClient.get('teachers/dashboard/'), {})
+      ? await optional(
+          () => httpClient.get(`teachers/dashboard/?range=${encodeURIComponent(range)}`),
+          {},
+        )
       : {};
     const lessons = asList(dashboard.next_lessons);
     const next = lessons[0] ?? null;
@@ -1023,6 +1218,7 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
     const form = asList(dashboard.pending_forms)[0] ?? null;
     const groups = toNumber(dashboard.groups_count);
     const students = toNumber(dashboard.students_count);
+    const actionSummary = dashboard.action_summary ?? {};
     const meeting = dashboard.next_meeting;
     const staffMeeting = asList(rawMeetings)[0] ?? null;
     const teacherMode = hasTeacherMembership(me);
@@ -1037,7 +1233,7 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
         }),
         greetingName: name,
         summary: teacherMode
-          ? `${groups} ${copy().group} · ${lessons.length} ${copy().lesson} · ${students} ${copy().student}`
+          ? `${groups} ${copy().group} · ${toNumber(actionSummary.lessons_today)} ${copy().lesson} · ${students} ${copy().student}`
           : `${tasks.length} ${copy().openTasks} · ${asList(rawMeetings).length} ${copy().meetings} · ${asList(rawRequests).filter((request) => request.status === 'pending').length} ${copy().pending}`,
       },
       surveyBanner: form
@@ -1049,10 +1245,10 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
         : null,
       stats: teacherMode
         ? [
-            { value: String(groups), label: copy().group },
-            { value: String(students), label: copy().student, color: 'var(--sf-success)' },
-            { value: String(lessons.length), label: copy().lesson, color: 'var(--sf-primary)' },
-            { value: String(tasks.length), label: copy().openTasks, color: 'var(--sf-accent)' },
+            { value: String(groups), label: copy().group, path: '/cohorts' },
+            { value: String(students), label: copy().student, color: 'var(--sf-success)', path: '/students' },
+            { value: String(toNumber(actionSummary.lessons_today)), label: copy().lesson, color: 'var(--sf-primary)', path: '/cohorts' },
+            { value: String(tasks.length), label: copy().openTasks, color: 'var(--sf-accent)', path: '/tasks' },
           ]
         : [
             { value: String(tasks.length), label: copy().openTasks, color: 'var(--sf-primary)' },
@@ -1098,12 +1294,25 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
           target: toNumber(metric.target),
         })),
         groupHealth: asList(dashboard.group_health).map((group) => ({
+          id: String(group.id ?? ''),
           name: String(group.name ?? ''),
-          attendance: toNumber(group.attendance),
+          attendance: group.attendance == null ? null : toNumber(group.attendance),
           up: toNumber(group.up_cards),
           down: toNumber(group.down_cards),
+          students: toNumber(group.students),
+          level: String(group.level ?? ''),
+          studyMonth: toNumber(group.study_month),
+          cycleLength: toNumber(group.lesson_cycle_length),
+          completedInCycle: toNumber(group.completed_in_cycle),
+          lessonsRemaining: toNumber(group.lessons_remaining_in_cycle),
         })),
         updatedAt: dashboard.updated_at ? formatTime(dashboard.updated_at) : '',
+      },
+      focus: {
+        lessonsToday: toNumber(actionSummary.lessons_today),
+        attendancePending: toNumber(actionSummary.attendance_pending),
+        gradingPending: toNumber(actionSummary.grading_pending),
+        cyclesDue: toNumber(actionSummary.cycles_due),
       },
       heroLesson: next
         ? {
@@ -1115,6 +1324,9 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
             sub: next.lesson_type || next.cohort || '',
             start: formatTime(next.starts_at),
             end: next.ends_at ? `– ${formatTime(next.ends_at)}` : '',
+            cohortId: next.cohort_id ? String(next.cohort_id) : '',
+            lessonId: next.id ? String(next.id) : '',
+            canTakeAttendance: Boolean(next.is_today),
           }
         : staffMeeting && !teacherMode
           ? {
@@ -1142,6 +1354,8 @@ export class LegacyHttpDashboardRepository extends IDashboardRepository {
         label: lesson.title || lesson.cohort || copy().nextLesson,
         room: lesson.cohort || '',
         state: index === 0 ? 'next' : 'planned',
+        cohortId: lesson.cohort_id ? String(lesson.cohort_id) : '',
+        lessonId: lesson.id ? String(lesson.id) : '',
       })),
       recentCards: [],
       pendingTasks: tasks,
@@ -1489,15 +1703,32 @@ export class HttpPrintRepository extends IPrintRepository {
 export class HttpSurveyRepository extends ISurveyRepository {
   #drafts = new Map();
 
-  async listActive() {
-    const forms = asList(await httpClient.get('forms/?status=published&page_size=100'));
-    return forms.map(mapForm);
+  async getCapabilities() {
+    const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    return { canCreate: canAccess(mapTeacher(me), 'forms', 'write') };
   }
 
-  listHistory() {
-    // The contract has no endpoint for a respondent's form history. Returning an
-    // honest empty state is safer than displaying another user's responses.
-    return Promise.resolve([]);
+  async listActive() {
+    const forms = asList(await httpClient.get('forms/?status=published&page_size=100'));
+    return forms.filter((form) => !form.response_submitted).map(mapForm);
+  }
+
+  async listHistory() {
+    const forms = asList(await httpClient.get('forms/?status=published&page_size=100'));
+    return forms.filter((form) => form.response_submitted).map((form) => ({
+      title: form.title,
+      issuer: form.created_by?.display_name || form.created_by?.account_label || 'StarForge EDU',
+      status: 'Submitted',
+      skipped: false,
+      date: form.updated_at ? formatDate(form.updated_at) : '—',
+      rating: null,
+    }));
+  }
+
+  async listManaged() {
+    return asList(await httpClient.get('forms/?page_size=100'))
+      .filter((form) => Object.hasOwn(form, 'audience_roles'))
+      .map(mapManagedForm);
   }
 
   async getDetail(id) {
@@ -1515,7 +1746,11 @@ export class HttpSurveyRepository extends ISurveyRepository {
   }
 
   submit(id, input) {
-    return httpClient.post(`forms/${id}/submit/`, { answers: input.answers ?? {} });
+    const answers = Object.entries(input.answers ?? {}).map(([field, value]) => ({
+      field: Number(field),
+      value,
+    }));
+    return httpClient.post(`forms/${id}/submit/`, { answers });
   }
 
   async skip() {
@@ -1524,10 +1759,62 @@ export class HttpSurveyRepository extends ISurveyRepository {
       'The supplied forms API does not support skipping a form.',
     );
   }
+
+  async create(input) {
+    const form = await httpClient.post('forms/', {
+      title: String(input.title || '').trim(),
+      description: String(input.description || '').trim(),
+      is_anonymous: Boolean(input.anonymous),
+      allow_multiple: Boolean(input.allowMultiple),
+      branch: input.branchId ? Number(input.branchId) : null,
+      opens_at: input.opensAt || null,
+      closes_at: input.closesAt || null,
+      audience_roles: asList(input.audienceRoles),
+      audience_user_ids: asList(input.audienceUserIds).map(Number),
+    });
+    for (const [order, field] of asList(input.fields).entries()) {
+      await httpClient.post(`forms/${form.id}/fields/`, {
+        label: String(field.label || '').trim(),
+        field_type: field.type || 'text',
+        required: Boolean(field.required),
+        order,
+        options: asList(field.options).map(String),
+        help_text: String(field.helpText || '').trim(),
+      });
+    }
+    const saved = input.publishNow
+      ? await httpClient.post(`forms/${form.id}/publish/`, {})
+      : await httpClient.get(`forms/${form.id}/`);
+    return mapManagedForm(saved);
+  }
+
+  async publish(id) {
+    return mapManagedForm(await httpClient.post(`forms/${id}/publish/`, {}));
+  }
+
+  async close(id) {
+    return mapManagedForm(await httpClient.post(`forms/${id}/close/`, {}));
+  }
+
+  async remove(id) {
+    await httpClient.delete(`forms/${id}/`);
+    return { id, removed: true };
+  }
+
+  async getResults(id) {
+    const [form, summary, responses] = await Promise.all([
+      httpClient.get(`forms/${id}/`),
+      httpClient.get(`forms/${id}/summary/`),
+      httpClient.get(`forms/${id}/responses/?page_size=100`),
+    ]);
+    return { form: mapManagedForm(form), summary, responses: asList(responses) };
+  }
 }
 
 export class HttpMgmtRepository extends IMgmtRepository {
   #currentUserId = null;
+  #contacts = null;
+  #contactsByUser = new Map();
 
   async #getCurrentUserId() {
     if (this.#currentUserId == null) {
@@ -1537,8 +1824,49 @@ export class HttpMgmtRepository extends IMgmtRepository {
     return this.#currentUserId;
   }
 
+  async #loadContacts() {
+    if (this.#contacts) return this.#contacts;
+    const response = await httpClient.get('messaging/contacts/?page_size=100', { withMeta: true });
+    const direct = asList(response?.data).map(mapMessagingContact);
+    this.#currentUserId = response?.pagination?.self_user_id ?? this.#currentUserId;
+    this.#contactsByUser = new Map(direct.map((contact) => [String(contact.userId), contact]));
+    const grouped = new Map();
+    for (const contact of direct) {
+      if (contact.kind !== 'student' || !contact.groupId) continue;
+      const key = String(contact.groupId);
+      const group = grouped.get(key) ?? {
+        key: `group-${key}`,
+        participantIds: [],
+        name: contact.groupName || `${copy().group} ${key}`,
+        role: '',
+        kind: 'group',
+        online: true,
+        groupName: contact.groupName || '',
+        profileType: 'Group chat',
+      };
+      group.participantIds.push(contact.userId);
+      grouped.set(key, group);
+    }
+    const groups = [...grouped.values()].map((group) => ({
+      ...group,
+      memberCount: group.participantIds.length,
+      role: `${group.participantIds.length} ${copy().student}`,
+    }));
+    this.#contacts = [...groups, ...direct];
+    return this.#contacts;
+  }
+
+  async listContacts() {
+    return this.#loadContacts();
+  }
+
   async listThreads() {
-    return asList(await httpClient.get('messaging/threads/?page_size=100')).map(mapThread);
+    const [threads] = await Promise.all([
+      httpClient.get('messaging/threads/?page_size=100'),
+      this.#loadContacts(),
+    ]);
+    const currentUserId = await this.#getCurrentUserId();
+    return asList(threads).map((thread) => mapThread(thread, this.#contactsByUser, currentUserId));
   }
 
   async getTranscript(threadId) {
@@ -1557,10 +1885,63 @@ export class HttpMgmtRepository extends IMgmtRepository {
     );
   }
 
-  async createThread() {
-    throw clientContractError(
-      'messaging/threads/',
-      'Starting a message requires selected numeric participant IDs. The current free-text recipient form must be connected to the user directory first.',
+  async sendAttachment(threadId, file, body = '') {
+    if (typeof File !== 'undefined' && !(file instanceof File)) {
+      throw new ApiError(400, 'LOCAL', 'messaging/attachments/upload-url/', {
+        code: 'attachment_required',
+        message: 'Choose a file to attach.',
+      });
+    }
+    const contentType = file.type || 'application/octet-stream';
+    const grant = await httpClient.post('messaging/attachments/upload-url/', {
+      filename: file.name,
+      size_bytes: file.size,
+      content_type: contentType,
+    });
+    const upload = new FormData();
+    Object.entries(grant.fields || {}).forEach(([key, value]) => upload.append(key, String(value)));
+    upload.append('file', file);
+    const response = await fetch(grant.url, { method: grant.method || 'POST', body: upload });
+    if (!response.ok) {
+      throw new ApiError(response.status, 'POST', 'message-attachment-upload', {
+        code: 'attachment_upload_failed',
+        message: 'The attachment could not be uploaded. Please try again.',
+      });
+    }
+    const currentUserId = await this.#getCurrentUserId();
+    return mapMessage(
+      await httpClient.post(`messaging/threads/${threadId}/messages/`, {
+        body: String(body || '').trim(),
+        attachments: [grant.key],
+      }),
+      currentUserId,
+    );
+  }
+
+  downloadAttachment(threadId, key) {
+    return httpClient.get(
+      `messaging/threads/${threadId}/attachments/download/?key=${encodeURIComponent(key)}`,
+    );
+  }
+
+  async createThread(input) {
+    const participantIds = [...new Set(asList(input?.participantIds).map(Number).filter(Number.isInteger))];
+    if (!participantIds.length) {
+      throw new ApiError(400, 'LOCAL', 'messaging/threads/', {
+        code: 'recipient_required',
+        message: 'Choose at least one recipient.',
+      });
+    }
+    await this.#loadContacts();
+    const currentUserId = await this.#getCurrentUserId();
+    return mapThread(
+      await httpClient.post('messaging/threads/', {
+        participant_ids: participantIds,
+        subject: String(input.subject || input.name || '').trim().slice(0, 200),
+        first_body: String(input.message || '').trim(),
+      }),
+      this.#contactsByUser,
+      currentUserId,
     );
   }
 
@@ -1568,18 +1949,14 @@ export class HttpMgmtRepository extends IMgmtRepository {
     return httpClient.post(`messaging/threads/${threadId}/read/`, {});
   }
 
-  async archiveThread() {
-    throw clientContractError(
-      'messaging/threads/{id}/',
-      'The supplied messaging API does not expose thread archiving.',
-    );
+  archiveThread(threadId, archived) {
+    return httpClient.patch(`messaging/threads/${threadId}/preferences/`, {
+      archived: Boolean(archived),
+    });
   }
 
-  async deleteThread() {
-    throw clientContractError(
-      'messaging/threads/{id}/',
-      'The supplied messaging API does not expose conversation deletion.',
-    );
+  deleteThread(threadId) {
+    return httpClient.delete(`messaging/threads/${threadId}/`);
   }
 }
 
@@ -1650,18 +2027,116 @@ export class HttpMaterialRepository extends IMaterialRepository {
     return { used: bytesLabel(bytes), total: '—', fileCount: files.length };
   }
 
-  async create() {
-    throw clientContractError(
-      'content/upload-url/',
-      'Material upload must use the signed-upload workflow and choose a lesson or folder before it can be created.',
+  async listTargets() {
+    const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    const folders = asList(await httpClient.get('content/folders/?page_size=100'));
+    if (me.principal_kind !== 'teacher') {
+      return folders.map((folder) => ({
+        key: `folder:${folder.id}`,
+        label: folder.library_name || folder.name,
+        detail: [folder.library_cohort_name, folder.name].filter(Boolean).join(' · '),
+        folderIds: [folder.id],
+        audience: null,
+        scope: folder.library_visibility,
+      }));
+    }
+
+    const cohortFolders = folders.filter(
+      (folder) => folder.library_visibility === 'cohort' && folder.library_cohort,
     );
+    const byCohort = new Map();
+    for (const folder of cohortFolders) {
+      const key = String(folder.library_cohort);
+      const existing = byCohort.get(key);
+      if (!existing || (existing.parent != null && folder.parent == null)) byCohort.set(key, folder);
+    }
+    const groupTargets = [...byCohort.values()].map((folder) => ({
+      key: `group:${folder.library_cohort}`,
+      label: folder.library_cohort_name || folder.library_name,
+      detail: copy().group,
+      folderIds: [folder.id],
+      audience: 'own_students',
+      scope: 'group',
+    }));
+    const globalFolder = folders.find(
+      (folder) => folder.library_visibility === 'tenant' && folder.parent == null,
+    ) ?? folders.find((folder) => folder.library_visibility === 'tenant');
+    const targets = [...groupTargets];
+    if (groupTargets.length > 1) {
+      targets.unshift({
+        key: 'all-my-students',
+        label: copy().allStudents || 'All my students',
+        detail: `${groupTargets.length} ${copy().group}`,
+        folderIds: groupTargets.map((target) => target.folderIds[0]),
+        audience: 'own_students',
+        scope: 'all_students',
+      });
+    }
+    if (globalFolder) {
+      targets.push({
+        key: 'organization',
+        label: copy().entireCenter || 'Entire education center',
+        detail: globalFolder.library_name || globalFolder.name,
+        folderIds: [globalFolder.id],
+        audience: 'global',
+        scope: 'organization',
+      });
+    }
+    return targets;
   }
 
-  async remove() {
-    throw clientContractError(
-      'content/files/{id}/',
-      'The supplied API does not expose file deletion from this screen.',
-    );
+  async create(input) {
+    if (!(input?.file instanceof File) || !input?.target?.folderIds?.length) {
+      throw new ApiError(400, 'LOCAL', 'content/upload-url/', {
+        code: 'material_upload_incomplete',
+        message: 'Choose a file and a destination.',
+      });
+    }
+    const originalName = input.file.name || 'material';
+    const filename = originalName
+      .normalize('NFKD')
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^\.+/, '')
+      .slice(0, 255) || `material_${Date.now()}`;
+    const contentType = input.file.type || 'application/octet-stream';
+    const uploads = [];
+    for (const folder of input.target.folderIds) {
+      const body = {
+        filename,
+        content_type: contentType,
+        size_bytes: input.file.size,
+        title: input.title || originalName,
+        folder: Number(folder),
+        is_downloadable: input.downloadable !== false,
+      };
+      if (input.target.audience) body.audience = input.target.audience;
+      const grant = await httpClient.post('content/upload-url/', body);
+      const response = await fetch(grant.url, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: input.file,
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, 'PUT', 'library-upload', {
+          code: 'material_upload_failed',
+          message: 'The file could not be uploaded. Please try again.',
+        });
+      }
+      await httpClient.post(`content/files/${grant.file_id}/confirm/`, {});
+      uploads.push(mapMaterial(await httpClient.get(`content/files/${grant.file_id}/`)));
+    }
+    this.#filesRequest = null;
+    return uploads;
+  }
+
+  async download(id) {
+    return httpClient.get(`content/files/${id}/download-url/`);
+  }
+
+  async remove(id) {
+    await httpClient.delete(`content/files/${id}/`);
+    this.#filesRequest = null;
+    return { id, removed: true };
   }
 }
 

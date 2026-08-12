@@ -32,7 +32,7 @@ const PAGE_SIZE = 100;
 const DETAIL_SECTIONS = Object.freeze([
   { id: 'overview', label: 'Overview', description: 'Position and teaching team', icon: Icons.home },
   { id: 'students', label: 'Students', description: 'Current and past members', icon: Icons.cohort },
-  { id: 'attendance', label: 'Attendance', description: 'Read-only monthly record', icon: Icons.check },
+  { id: 'attendance', label: 'Attendance', description: 'Take attendance and review the group record', icon: Icons.check },
   { id: 'schedule', label: 'Schedule', description: 'Lessons, room, and teacher', icon: Icons.cal },
   { id: 'learning', label: 'Learning', description: 'Assignments and homework', icon: Icons.folder },
   { id: 'exams', label: 'Exams', description: 'Assessment plans', icon: Icons.doc },
@@ -137,6 +137,17 @@ function shiftDate(isoDate, amount) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function calendarMonthRange(offset = 0) {
+  const today = todayInOrganization();
+  const [year, month] = today.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const last = new Date(Date.UTC(year, month + offset, 0));
+  return {
+    from: first.toISOString().slice(0, 10),
+    to: last.toISOString().slice(0, 10),
+  };
+}
+
 function validDate(value) {
   const normalized = String(value || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
@@ -209,6 +220,7 @@ function directoryRoute(basePath, filters, page = 1) {
 function groupAccess(user) {
   const teachingScope = user?.accountKind === 'teacher';
   return {
+    principalId: user?.id,
     teachingScope,
     cohorts: canUseCapability(user, 'cohorts:read'),
     cohortsWrite: canUseCapability(user, 'cohorts:write'),
@@ -220,7 +232,9 @@ function groupAccess(user) {
     studentsWrite: canUseCapability(user, 'students:write'),
     teachers: !teachingScope && canUseCapability(user, 'teachers:read'),
     attendance: canUseCapability(user, 'attendance:read'),
+    attendanceWrite: canUseCapability(user, 'attendance:write'),
     schedule: canUseCapability(user, 'schedule:read'),
+    teachingProgressWrite: teachingScope && canUseCapability(user, 'academics:write'),
     assignments: canUseCapability(user, 'assignments:read'),
     academics: canUseCapability(user, 'academics:read'),
     finance: canUseCapability(user, 'finance:read'),
@@ -703,14 +717,13 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
 }
 
 function DateRangeForm({ groupId, section, range, basePath, onNav }) {
-  const today = todayInOrganization();
   const presets = [
-    { label: '30 days', from: shiftDate(today, -29) },
-    { label: '90 days', from: shiftDate(today, -89) },
-    { label: '6 months', from: shiftDate(today, -179) },
+    { label: 'Previous month', ...calendarMonthRange(-1) },
+    { label: 'This month', ...calendarMonthRange(0) },
+    { label: 'Next month', ...calendarMonthRange(1) },
   ];
 
-  function openRange(from, to = today) {
+  function openRange(from, to) {
     navigate(onNav, `${basePath}/${groupId}/${section}?from=${from}&to=${to}`);
   }
 
@@ -729,10 +742,10 @@ function DateRangeForm({ groupId, section, range, basePath, onNav }) {
       <div className="gp3-range-presets" aria-label="Quick reporting periods">
         {presets.map((preset) => (
           <button
-            className={range.from === preset.from && range.to === today ? 'is-active' : ''}
+            className={range.from === preset.from && range.to === preset.to ? 'is-active' : ''}
             key={preset.label}
             type="button"
-            onClick={() => openRange(preset.from)}
+            onClick={() => openRange(preset.from, preset.to)}
           >
             {preset.label}
           </button>
@@ -767,7 +780,7 @@ function GroupHero({ cohort, basePath, access, onNav }) {
           <span className="gp3-group-mark" aria-hidden="true"><Icon source={Icons.cohort} size={21} /></span>
           <div><span className="gp3-eyebrow">Group workspace</span><h1>{text(cohort.name)}</h1><p>
             {access.organization ? <><RouteLink to={`branches/${cohort.branch}`} onNav={onNav}>{text(cohort.branch_name)}</RouteLink><span>·</span></> : null}
-            {text(cohort.department_name)}<span>·</span>{text(cohort.level, 'Level not recorded')}
+            {text(cohort.department_name)}<span>·</span>{text(cohort.level, 'Level not recorded')}<span>·</span>Study month {formatBusinessNumber(cohort.study_month || 1)}
           </p></div>
         </div>
         <div className="gp3-hero-meta"><Status value={cohort.is_archived ? 'archived' : 'active'}>{cohort.is_archived ? 'Archived' : 'Active'}</Status><span>{dateOnly(cohort.start_date)} – {dateOnly(cohort.end_date)}</span>{access.cohortsWrite && !cohort.is_archived ? <RouteLink className="gp3-button" to={`${basePath}/${cohort.id}/edit`} onNav={onNav}><Icon source={Icons.settings} size={14} /> Edit group</RouteLink> : null}{access.cohortsWrite && cohort.is_archived ? <RestoreGroupButton cohortId={cohort.id} /> : null}</div>
@@ -859,7 +872,76 @@ function TeacherAssignmentManager({ cohort, rows }) {
   );
 }
 
-function OverviewSection({ cohort, membersState, teachersState, dashboardState, lessonsState, range, basePath, access, onNav }) {
+function TeachingProgressPanel({ cohort, cycleState, access }) {
+  const cycle = cycleState.data;
+  const [level, setLevel] = useState(cohort.level || '');
+  const [studyMonth, setStudyMonth] = useState(String(cohort.study_month || 1));
+  const [cycleLength, setCycleLength] = useState(String(cohort.lesson_cycle_length || 12));
+  const [error, setError] = useState(null);
+  const toast = useToast();
+  const canManage = access.teachingProgressWrite
+    && String(cohort.primary_teacher || '') === String(access.principalId || '');
+
+  useEffect(() => {
+    setLevel(cycle?.current_level ?? cohort.level ?? '');
+    setStudyMonth(String(cycle?.current_study_month ?? cohort.study_month ?? 1));
+    setCycleLength(String(cycle?.lesson_cycle_length ?? cohort.lesson_cycle_length ?? 12));
+  }, [cohort.id, cohort.level, cohort.lesson_cycle_length, cohort.study_month, cycle?.current_level, cycle?.current_study_month, cycle?.lesson_cycle_length]);
+
+  const mutation = useMutation({
+    mutationFn: (body) => httpRequest('PATCH', `/api/v1/cohorts/${cohort.id}/teaching-progress/`, { body }),
+    onSuccess: (saved) => {
+      setError(null);
+      setLevel(saved.level || '');
+      setStudyMonth(String(saved.study_month));
+      setCycleLength(String(saved.lesson_cycle_length));
+      queryClient.invalidateQueries({ queryKey: ['api'] });
+      toast.success('The group learning progress is now up to date.', { title: 'Teaching progress saved' });
+    },
+    onError: (failure) => {
+      setError(failure);
+      toast.danger(mutationMessage(failure, 'The teaching progress could not be saved.'), { title: 'Progress not saved' });
+    },
+  });
+
+  const completed = validCount(cycle?.completed_in_current_cycle) ?? 0;
+  const required = validCount(cycle?.lesson_cycle_length) ?? validCount(cohort.lesson_cycle_length) ?? 12;
+  const remaining = validCount(cycle?.lessons_remaining_in_cycle);
+  const completion = required > 0 ? Math.min(100, completed / required * 100) : 0;
+
+  function save(nextMonth = Number(studyMonth)) {
+    mutation.mutate({
+      level: level.trim(),
+      study_month: Math.max(1, Math.min(600, Number(nextMonth) || 1)),
+      lesson_cycle_length: Number(cycleLength) === 8 ? 8 : 12,
+    });
+  }
+
+  if (cycleState.error) return <Panel eyebrow="Learning progress" title="Study month and level" detail="Lesson-cycle progress could not be opened."><QueryFailure error={cycleState.error} retry={cycleState.retry} /></Panel>;
+  if (cycleState.pending) return <Panel eyebrow="Learning progress" title="Study month and level" detail="Loading the current lesson cycle."><LoadingPanel lines={4} /></Panel>;
+
+  return <Panel eyebrow="Learning progress" title={`Study month ${formatBusinessNumber(cycle?.current_study_month ?? cohort.study_month ?? 1)}`} detail={`${formatBusinessNumber(completed)} of ${formatBusinessNumber(required)} completed lessons in the current study month.`} action={cycle?.exam_day_due ? <Status value="accent">Assessment lesson next</Status> : null}>
+    <div className="gp3-progress-workspace">
+      <div className="gp3-cycle-summary">
+        <div className="gp3-cycle-track" aria-label={`${completed} of ${required} lessons completed`}><i style={{ width: `${completion}%` }} /></div>
+        <div><strong>{remaining == null ? 'Progress unavailable' : `${formatBusinessNumber(remaining)} lesson${remaining === 1 ? '' : 's'} remaining`}</strong><small>{cycle?.completion_data_complete === false ? `${formatBusinessNumber(cycle.past_scheduled_lessons_without_completion || 0)} earlier lesson${cycle.past_scheduled_lessons_without_completion === 1 ? '' : 's'} still need completion status` : 'Only completed lessons advance the study month'}</small></div>
+      </div>
+      {canManage ? <form className="gp3-progress-form" onSubmit={(event) => { event.preventDefault(); save(); }}>
+        {error ? <div className="fw-form-error" role="alert">{mutationMessage(error, 'The teaching progress could not be saved.')}</div> : null}
+        <label><span>Current level</span><input value={level} maxLength="64" onChange={(event) => setLevel(event.target.value)} placeholder="For example, Elementary" /></label>
+        <label><span>Study month</span><input value={studyMonth} type="number" min="1" max="600" onChange={(event) => setStudyMonth(event.target.value)} /></label>
+        <label><span>Lessons per study month</span><select value={cycleLength} onChange={(event) => setCycleLength(event.target.value)}><option value="8">8 lessons</option><option value="12">12 lessons</option></select></label>
+        <div className="gp3-progress-actions">
+          <button type="button" className="gp3-button" disabled={mutation.isPending || Number(studyMonth) <= 1} onClick={() => save(Number(studyMonth) - 1)}>Previous month</button>
+          <button type="submit" className="gp3-button" disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : 'Save details'}</button>
+          <button type="button" className="gp3-button is-primary" disabled={mutation.isPending || Number(studyMonth) >= 600} onClick={() => save(Number(studyMonth) + 1)}>Start next month</button>
+        </div>
+      </form> : <div className="gp3-progress-readonly"><DetailValue label="Current level" value={text(cycle?.current_level ?? cohort.level)} /><DetailValue label="Study month" value={formatBusinessNumber(cycle?.current_study_month ?? cohort.study_month ?? 1)} /><DetailValue label="Lesson cycle" value={`${formatBusinessNumber(required)} lessons`} /></div>}
+    </div>
+  </Panel>;
+}
+
+function OverviewSection({ cohort, membersState, teachersState, dashboardState, lessonsState, cycleState, range, basePath, access, onNav }) {
   const today = todayInOrganization();
   const activeMembers = membersState.rows.filter((member) => String(member.start_date || '') <= today && (!member.end_date || member.end_date >= today));
   const capacity = validCount(cohort.capacity);
@@ -927,8 +1009,9 @@ function OverviewSection({ cohort, membersState, teachersState, dashboardState, 
         {access.teachers ? <Metric label="Teaching team" value={teachersState.pending ? '…' : teachersState.error && !assignmentRows(cohort).length ? '—' : formatBusinessNumber(teachersState.rows.length || assignmentRows(cohort).length)} detail={teachersState.error ? 'Using assignments recorded on this group' : 'Recorded assignments'} tone="accent" /> : null}
         {access.attendance ? <Metric label="Attendance" value={dashboardState.pending ? '…' : dashboardState.error || (!attendanceComplete && attendanceOutcomeCount === 0) ? '—' : percent(attendanceRate)} detail={attendanceDetail} tone="success" /> : null}
       </div>
-      <div className="gp3-two-col">
-        <Panel eyebrow="Group record" title="Operating details" detail="The durable information behind this group.">
+      <TeachingProgressPanel cohort={cohort} cycleState={cycleState} access={access} />
+      <div className={`gp3-two-col${access.teachers ? '' : ' is-single'}`}>
+        <Panel eyebrow="Group record" title="Operating details" detail="Core information for this teaching group.">
           <div className="gp3-facts">
             {access.organization ? <DetailValue label="Branch"><RouteLink to={`branches/${cohort.branch}`} onNav={onNav}>{text(cohort.branch_name)}</RouteLink></DetailValue> : null}
             <DetailValue label="Department" value={text(cohort.department_name)} />
@@ -1049,7 +1132,7 @@ function MembershipManager({ cohort, members, canCreateStudent, onNav }) {
           {!students.pending && !students.error && !candidates.length ? <p className="gp3-management-note">No eligible students match this search. Try a different name or create a new student record.</p> : null}
         </section>
         <section className="gp3-management-section">
-          <header><div><strong>Move or remove a current student</strong><small>A move closes the current membership and creates one in the destination group as a single backend transaction.</small></div></header>
+          <header><div><strong>Move or remove a current student</strong><small>A move closes the current membership and places the student in the destination group in one recorded action.</small></div></header>
           <form className="gp3-inline-form" onSubmit={moveOut}>
             <label><span>Current student</span><select required value={memberId} onChange={(event) => { setMemberId(event.target.value); setError(null); }}><option value="">Select a student</option>{members.map((member) => <option value={member.student} key={member.id || member.student}>{member.student_name}</option>)}</select></label>
             <label><span>Destination group</span><select required value={targetId} onChange={(event) => setTargetId(event.target.value)} disabled={groups.pending}><option value="">Select another group</option>{targetGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
@@ -1174,7 +1257,64 @@ function MonthlyAttendance({ cohort, records, lessons, basePath, onNav }) {
   </Panel>;
 }
 
-function AttendanceSection({ cohort, membersState, dashboardState, recordsState, lessonsState, range, basePath, onNav }) {
+function AttendanceCapture({ cohort: _cohort, members, lessons, records, requestedLessonId }) {
+  const today = todayInOrganization();
+  const todayLessons = lessons.filter((lesson) => organizationDateInput(lesson.starts_at) === today && lesson.status === 'scheduled');
+  const requested = todayLessons.find((lesson) => String(lesson.id) === String(requestedLessonId));
+  const [lessonId, setLessonId] = useState(String(requested?.id || todayLessons[0]?.id || ''));
+  const [statuses, setStatuses] = useState({});
+  const [error, setError] = useState(null);
+  const toast = useToast();
+  const selectedLesson = todayLessons.find((lesson) => String(lesson.id) === lessonId);
+  const activeMembers = members.filter((member) => String(member.start_date || '') <= today && (!member.end_date || String(member.end_date) >= today));
+
+  useEffect(() => {
+    const next = {};
+    records.filter((record) => String(record.lesson) === String(lessonId)).forEach((record) => {
+      next[String(record.student)] = record.status;
+    });
+    setStatuses(next);
+  }, [lessonId, records]);
+
+  const mutation = useMutation({
+    mutationFn: (entries) => httpRequest('POST', `/api/v1/attendance/lessons/${lessonId}/mark/`, { body: entries }),
+    onSuccess: (saved) => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['api'] });
+      toast.success(`${formatBusinessNumber(saved.records?.length || 0)} attendance record${saved.records?.length === 1 ? '' : 's'} saved.`, { title: 'Attendance saved' });
+    },
+    onError: (failure) => {
+      setError(failure);
+      toast.danger(mutationMessage(failure, 'Attendance could not be saved.'), { title: 'Attendance not saved' });
+    },
+  });
+
+  if (!todayLessons.length) return null;
+  const lessonStarted = selectedLesson && new Date(selectedLesson.starts_at).getTime() <= Date.now();
+  const chosen = activeMembers.filter((member) => ATTENDANCE_LABELS[statuses[String(member.student)]]);
+
+  return <Panel eyebrow="Today" title="Take attendance" detail="This register is available only for a lesson planned for today." action={<Status value="active">{formatBusinessNumber(todayLessons.length)} lesson{todayLessons.length === 1 ? '' : 's'} today</Status>}>
+    <div className="gp3-attendance-capture">
+      <div className="gp3-attendance-toolbar">
+        <label><span>Lesson</span><select value={lessonId} onChange={(event) => setLessonId(event.target.value)}>{todayLessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{timeOnly(lesson.starts_at)} · {text(lesson.title, 'Lesson')}</option>)}</select></label>
+        <button type="button" className="gp3-button" onClick={() => setStatuses(Object.fromEntries(activeMembers.map((member) => [String(member.student), 'present'])))}>Mark all present</button>
+        <button type="button" className="gp3-button" onClick={() => setStatuses({})}>Clear choices</button>
+      </div>
+      {error ? <div className="fw-form-error" role="alert">{mutationMessage(error, 'Attendance could not be saved.')}</div> : null}
+      {!lessonStarted ? <div className="gp3-inline-warning"><Icon source={Icons.cal} size={16} /><span>The register can be saved when this lesson begins at {timeOnly(selectedLesson?.starts_at)}.</span></div> : null}
+      <div className="gp3-attendance-register">{activeMembers.map((member) => <label key={member.id || member.student}>
+        <span><SfAvatar name={member.student_name} size={31} decorative /><strong>{text(member.student_name)}</strong></span>
+        <select aria-label={`Attendance for ${text(member.student_name)}`} value={statuses[String(member.student)] || ''} onChange={(event) => setStatuses((current) => ({ ...current, [String(member.student)]: event.target.value }))}>
+          <option value="">Not marked</option>
+          {Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>)}</div>
+      <div className="gp3-attendance-submit"><span>{formatBusinessNumber(chosen.length)} of {formatBusinessNumber(activeMembers.length)} students marked</span><button type="button" className="gp3-button is-primary" disabled={!lessonStarted || !chosen.length || mutation.isPending} onClick={() => mutation.mutate(chosen.map((member) => ({ student: Number(member.student), status: statuses[String(member.student)] })))}>{mutation.isPending ? 'Saving…' : 'Save attendance'}</button></div>
+    </div>
+  </Panel>;
+}
+
+function AttendanceSection({ cohort, membersState, dashboardState, recordsState, lessonsState, range, basePath, access, requestedLessonId, onNav }) {
   const records = recordsState.rows;
   const dashboardRows = Array.isArray(dashboardState.data?.students) ? dashboardState.data.students : [];
   const dashboardCountsValid = dashboardRows.every((row) => validCount(row.total) != null);
@@ -1208,6 +1348,7 @@ function AttendanceSection({ cohort, membersState, dashboardState, recordsState,
   const declaredRecords = declaredCollectionTotal(recordsState);
   return <div className="gp3-section-stack">
     <DateRangeForm groupId={cohort.id} section="attendance" range={range} basePath={basePath} onNav={onNav} />
+    {access.attendanceWrite ? <AttendanceCapture cohort={cohort} members={membersState.rows} lessons={lessonsState.rows} records={records} requestedLessonId={requestedLessonId} /> : null}
     <div className="gp3-metrics">
       <Metric label="Group attendance" value={dashboardState.pending ? '…' : dashboardState.error || (!dashboardComplete && dashboardOutcomeCount === 0) ? '—' : percent(attendanceRate)} detail={dashboardDetail} tone="success" />
       <Metric label="Present" value={recordValue(counts.present)} detail={recordDetail} tone="success" />
@@ -1220,7 +1361,7 @@ function AttendanceSection({ cohort, membersState, dashboardState, recordsState,
         : `${formatBusinessNumber(records.length)} attendance records are loaded from a partial register. Status cards show loaded non-zero counts only; zero values are withheld until coverage is complete.`}
     </CoverageNote> : null}
     {!recordsState.pending && !recordsState.error && recordsComplete ? <MonthlyAttendance cohort={cohort} records={records} lessons={lessonsState.rows} basePath={basePath} onNav={onNav} /> : null}
-    <Panel eyebrow="Read-only record" title="Attendance matrix" detail={`${dateOnly(range.from)} through ${dateOnly(range.to)}. Blank cells mean no record, never an assumed absence.`}>
+    <Panel eyebrow="Attendance record" title="Attendance matrix" detail={`${dateOnly(range.from)} through ${dateOnly(range.to)}. Blank cells mean no record, never an assumed absence.`}>
       {[membersState, recordsState, lessonsState].some((state) => state.error) ? <QueryFailure error={[membersState, recordsState, lessonsState].find((state) => state.error)?.error} retry={() => Promise.all([membersState.retry(), recordsState.retry(), lessonsState.retry()])} /> : [membersState, recordsState, lessonsState].some((state) => state.pending) ? <LoadingPanel lines={8} /> : <AttendanceMatrix members={periodMembers} dashboardRows={dashboardRows} lessons={lessonsState.rows} records={records} complete={sourceComplete} onNav={onNav} />}
     </Panel>
     <Panel eyebrow="Student summary" title="Attendance by student" detail="Counts come from the group attendance summary for this reporting period.">
@@ -1258,7 +1399,7 @@ function CoverAssignmentManager({ cohort, lessons, access }) {
     },
   });
   if (!access.cover) return null;
-  return <Panel eyebrow="Absence coverage" title="Open cover requests" detail="Assign another active teacher or open the lesson to the branch pool. Schedule conflicts are verified by the backend before reassignment.">
+  return <Panel eyebrow="Absence coverage" title="Open cover requests" detail="Assign another active teacher or open the lesson to the branch pool. Availability is checked before any reassignment is saved.">
     {error ? <div className="fw-form-error" role="alert">{mutationMessage(error, 'The cover request could not be updated.')}</div> : null}
     {covers.error ? <QueryFailure error={covers.error} retry={covers.retry} title="Lesson-cover requests could not be opened" /> : covers.pending ? <LoadingPanel lines={3} /> : rows.length ? <div className="gp3-cover-list">{rows.map((cover) => { const lesson = lessonMap.get(String(cover.lesson)); const choice = choices[cover.id] || ''; return <article key={cover.id}><div><span className="gp3-activity-icon"><Icon source={Icons.user} size={16} /></span><span><strong>{text(lesson?.title, `Lesson ${cover.lesson}`)}</strong><small>{localDate(lesson?.starts_at)} · {text(lesson?.teacher_name, 'Teacher not recorded')}</small><small>{text(cover.reason, 'No absence reason was recorded')}</small></span><Status value={cover.pool ? 'pool' : cover.status}>{cover.pool ? 'Open pool' : cover.status}</Status></div>{access.coverApprove ? <div className="gp3-cover-actions"><select aria-label={`Cover teacher for ${text(lesson?.title, 'lesson')}`} value={choice} onChange={(event) => setChoices((current) => ({ ...current, [cover.id]: event.target.value }))}><option value="">Select an active teacher</option>{teachers.rows.filter((teacher) => String(teacher.id) !== String(lesson?.teacher)).map((teacher) => <option value={teacher.id} key={teacher.id}>{teacher.full_name || teacher.name}{teacher.is_substitute ? ' · Substitute' : ''}</option>)}</select><button type="button" className="gp3-button is-primary" disabled={!choice || mutation.isPending} onClick={() => mutation.mutate({ cover: cover.id, action: 'assign', teacher: choice })}>Assign cover</button><button type="button" className="gp3-button" disabled={cover.pool || mutation.isPending} onClick={() => mutation.mutate({ cover: cover.id, action: 'open-pool' })}>Open to pool</button><button type="button" className="gp3-button is-danger" disabled={mutation.isPending} onClick={() => { if (window.confirm('Reject this open cover request?')) mutation.mutate({ cover: cover.id, action: 'reject' }); }}>Reject</button></div> : null}</article>; })}</div> : <EmptyState icon={Icons.check} eyebrow="Cover board" title="No open cover requests for these lessons" description="A request appears here after the lesson’s assigned teacher records an absence request." />}
   </Panel>;
@@ -1268,7 +1409,7 @@ function ScheduleSection({ cohort, lessonsState, range, basePath, access, onNav 
   return <div className="gp3-section-stack"><DateRangeForm groupId={cohort.id} section="schedule" range={range} basePath={basePath} onNav={onNav} /><Panel eyebrow="Teaching calendar" title="Schedule" detail={`${dateOnly(range.from)} through ${dateOnly(range.to)}`}>
     {lessonsState.error ? <QueryFailure error={lessonsState.error} retry={lessonsState.retry} /> : lessonsState.pending ? <LoadingPanel lines={7} /> : lessonsState.rows.length ? <>
       <CoverageNote complete={collectionComplete(lessonsState)} loaded={lessonsState.rows.length} total={lessonsState.total} />
-      <div className="gp3-table-wrap" role="region" aria-label="Group schedule, scrollable table" tabIndex="0"><table className="gp3-table" aria-label="Group schedule"><thead><tr><th>Date and time</th><th>Lesson</th><th>Teacher</th><th>Room</th><th>Type</th><th>State</th></tr></thead><tbody>{lessonsState.rows.map((lesson) => <tr key={lesson.id}><td><strong>{localDate(lesson.starts_at)}</strong><small>Ends {localDate(lesson.ends_at)}</small></td><td>{text(lesson.title, 'Lesson')}</td><td>{access.teachers ? <RouteLink to={`teachers/directory/${lesson.teacher}`} onNav={onNav}>{text(lesson.teacher_name)}</RouteLink> : text(lesson.teacher_name)}</td><td>{text(lesson.room_name)}</td><td>{text(lesson.lesson_type_name)}</td><td><Status value={lesson.status}>{lesson.status}</Status>{lesson.cancel_reason ? <small>{lesson.cancel_reason}</small> : null}</td></tr>)}</tbody></table></div>
+      <div className="gp3-table-wrap" role="region" aria-label="Group schedule, scrollable table" tabIndex="0"><table className="gp3-table" aria-label="Group schedule"><thead><tr><th>Date and time</th><th>Lesson</th><th>Teacher</th><th>Room</th><th>Type</th><th>State</th>{access.attendanceWrite ? <th><span className="gp3-sr-only">Action</span></th> : null}</tr></thead><tbody>{lessonsState.rows.map((lesson) => { const todayLesson = organizationDateInput(lesson.starts_at) === todayInOrganization() && lesson.status === 'scheduled'; return <tr key={lesson.id}><td><strong>{localDate(lesson.starts_at)}</strong><small>Ends {localDate(lesson.ends_at)}</small></td><td>{text(lesson.title, 'Lesson')}</td><td>{access.teachers ? <RouteLink to={`teachers/directory/${lesson.teacher}`} onNav={onNav}>{text(lesson.teacher_name)}</RouteLink> : text(lesson.teacher_name)}</td><td>{text(lesson.room_name)}</td><td>{text(lesson.lesson_type_name)}</td><td><Status value={lesson.status}>{lesson.status}</Status>{lesson.cancel_reason ? <small>{lesson.cancel_reason}</small> : null}</td>{access.attendanceWrite ? <td>{todayLesson ? <RouteLink className="gp3-button is-primary" to={`${basePath}/${cohort.id}/attendance?from=${todayInOrganization()}&to=${todayInOrganization()}&lesson=${lesson.id}`} onNav={onNav}>Take attendance</RouteLink> : null}</td> : null}</tr>; })}</tbody></table></div>
     </> : <EmptyState icon={Icons.cal} eyebrow="Schedule" title="No lessons are recorded in this period" description="Choose another reporting period to inspect the teaching calendar." />}
   </Panel>{!lessonsState.pending && !lessonsState.error ? <CoverAssignmentManager cohort={cohort} lessons={lessonsState.rows} access={access} /> : null}</div>;
 }
@@ -1346,6 +1487,7 @@ function InvalidGroup({ onNav, basePath = 'groups', mismatch = false }) {
 function GroupDetail({ groupId, section, sections, route, onNav, branchId, access }) {
   const routed = workspaceRoute(route);
   const range = routeRange(routed.params);
+  const requestedLessonId = /^\d+$/.test(routed.params.get('lesson') || '') ? routed.params.get('lesson') : '';
   const base = `/api/v1/cohorts/${groupId}`;
   const cohortState = useWorkspaceData(`${base}/`);
   useWorkspaceTitle(cohortState.data?.name, 'Groups', section);
@@ -1355,6 +1497,7 @@ function GroupDetail({ groupId, section, sections, route, onNav, branchId, acces
   const needsLessons = access.schedule && ['overview', 'attendance', 'schedule'].includes(section);
   const membersState = useWorkspaceData(`${base}/members/`, undefined, { enabled: branchVerified && needsMembers });
   const teachersState = useWorkspaceData(`${base}/teachers/`, undefined, { enabled: branchVerified && section === 'overview' && access.teachers });
+  const cycleState = useWorkspaceData(`${base}/cycle-progress/`, undefined, { enabled: branchVerified && section === 'overview' });
   const dashboardState = useWorkspaceData(`/api/v1/attendance/cohorts/${groupId}/dashboard/`, {
     date_from: `${range.from}T00:00:00+05:00`,
     date_to: `${range.to}T23:59:59.999+05:00`,
@@ -1386,9 +1529,9 @@ function GroupDetail({ groupId, section, sections, route, onNav, branchId, acces
     <GroupSectionNavigation cohort={cohort} section={section} sections={sections} basePath={basePath} range={range} onNav={onNav} />
     <label className="gp3-section-select"><span>Group record section</span><select value={section} onChange={(event) => navigate(onNav, `${basePath}/${cohort.id}/${event.target.value}?from=${range.from}&to=${range.to}`)}>{sections.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
     <div className="gp3-detail-content">
-        {section === 'overview' ? <OverviewSection cohort={cohort} membersState={membersState} teachersState={teachersState} dashboardState={dashboardState} lessonsState={lessonsState} range={range} basePath={basePath} access={access} onNav={onNav} /> : null}
+        {section === 'overview' ? <OverviewSection cohort={cohort} membersState={membersState} teachersState={teachersState} dashboardState={dashboardState} lessonsState={lessonsState} cycleState={cycleState} range={range} basePath={basePath} access={access} onNav={onNav} /> : null}
         {section === 'students' ? <StudentsSection cohort={cohort} membersState={membersState} dashboardState={dashboardState} canViewAttendance={access.attendance} canWrite={access.cohortsWrite} canCreateStudent={access.studentsWrite} onNav={onNav} /> : null}
-        {section === 'attendance' ? <AttendanceSection cohort={cohort} membersState={membersState} dashboardState={dashboardState} recordsState={recordsState} lessonsState={lessonsState} range={range} basePath={basePath} onNav={onNav} /> : null}
+        {section === 'attendance' ? <AttendanceSection cohort={cohort} membersState={membersState} dashboardState={dashboardState} recordsState={recordsState} lessonsState={lessonsState} range={range} basePath={basePath} access={access} requestedLessonId={requestedLessonId} onNav={onNav} /> : null}
         {section === 'schedule' ? <ScheduleSection cohort={cohort} lessonsState={lessonsState} range={range} basePath={basePath} access={access} onNav={onNav} /> : null}
         {section === 'learning' ? <LearningSection assignmentsState={assignmentsState} /> : null}
         {section === 'exams' ? <ExamsSection examsState={examsState} /> : null}

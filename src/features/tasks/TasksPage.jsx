@@ -30,6 +30,7 @@ import styles from './tasks.module.css';
 const PREDICATES = {
   all: () => true,
   mine: (t) => t.mine === true,
+  created: (t) => t.createdByMe === true,
   mgmt: (t) => t.fromMgmt,
   urgent: (t) => t.urgent,
   done: (t) => t.state === 'done',
@@ -82,6 +83,11 @@ function TaskCard({ task, onToggle, handleProps, style, dragging = false, setNod
             <span>{task.assigner}</span>
           </span>
           <span style={{ flex: 1 }} />
+          {task.recipient && task.recipient !== '—' && (
+            <span className={styles.recipient} title={task.recipient}>
+              <Icon name="user" size={11} /> {task.recipient}
+            </span>
+          )}
           {task.subtasks && (
             <span className={`sf-mono ${styles.subs}`}>
               ✓ {task.subtasks.done}/{task.subtasks.total}
@@ -508,29 +514,72 @@ function CalendarView({ tasks, onToggle }) {
   );
 }
 
-function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState }) {
+function NewTaskModal({
+  open,
+  onClose,
+  columns,
+  projects,
+  targets,
+  targetsLoading,
+  onCreate,
+  presetState,
+}) {
   const { t, locale } = useT();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [project, setProject] = useState('');
   const [priority, setPriority] = useState('P2');
   const [state, setState] = useState(presetState ?? 'todo');
   const [deadline, setDeadline] = useState('');
+  const [targetSearch, setTargetSearch] = useState('');
+  const [selectedTargets, setSelectedTargets] = useState([]);
 
   // Re-seed the column when the modal is opened from a specific Kanban lane.
   useEffect(() => {
     if (!open) return;
     setTitle('');
+    setDescription('');
     setProject('');
     setPriority('P2');
     setState(presetState ?? 'todo');
     setDeadline('');
-  }, [open, presetState]);
+    setTargetSearch('');
+    const self = targets?.people?.find((person) => person.self);
+    setSelectedTargets(self ? [self.key] : []);
+  }, [open, presetState, targets]);
+
+  const targetRows = useMemo(
+    () => [
+      ...(targets?.people ?? []),
+      ...(targets?.departments ?? []).map((item) => ({ ...item, kind: 'department' })),
+      ...(targets?.branches ?? []).map((item) => ({ ...item, kind: 'branch' })),
+    ],
+    [targets],
+  );
+  const query = targetSearch.trim().toLocaleLowerCase(locale);
+  const visiblePeople = (targets?.people ?? []).filter((person) =>
+    `${person.name} ${person.role} ${person.cohort ?? ''}`.toLocaleLowerCase(locale).includes(query),
+  );
+  const visibleDepartments = (targets?.departments ?? []).filter((item) =>
+    `${item.name} ${item.branch ?? ''}`.toLocaleLowerCase(locale).includes(query),
+  );
+  const visibleBranches = (targets?.branches ?? []).filter((item) =>
+    item.name.toLocaleLowerCase(locale).includes(query),
+  );
+  const assistants = (targets?.people ?? []).filter((person) => person.assistant);
+
+  const toggleTarget = (key) => {
+    setSelectedTargets((current) =>
+      current.includes(key) ? current.filter((value) => value !== key) : [...current, key],
+    );
+  };
 
   const submit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
     onCreate({
       title: title.trim(),
+      description: description.trim(),
       project: project || projects[0] || t('tasks.project'),
       priority,
       state,
@@ -543,6 +592,7 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
           }).format(new Date(deadline))
         : '—',
       deadlineAt: deadline ? new Date(deadline).toISOString() : null,
+      targets: targetRows.filter((target) => selectedTargets.includes(target.key)),
     });
     setTitle('');
     setProject('');
@@ -561,7 +611,12 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
           <Button variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" icon="plus" onClick={submit}>
+          <Button
+            variant="primary"
+            icon="plus"
+            onClick={submit}
+            disabled={!title.trim() || selectedTargets.length === 0}
+          >
             {t('common.newTask')}
           </Button>
         </>
@@ -575,6 +630,15 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
+          />
+        </label>
+        <label className={styles.field}>
+          <span>{t('tasks.description')}</span>
+          <textarea
+            className={`${styles.inputCtl} ${styles.taskDescription}`}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder={t('tasks.descriptionHint')}
           />
         </label>
         <label className={styles.field}>
@@ -620,6 +684,89 @@ function NewTaskModal({ open, onClose, columns, projects, onCreate, presetState 
             onChange={(e) => setDeadline(e.target.value)}
           />
         </label>
+        <div className={styles.field}>
+          <span>{t('tasks.recipients')}</span>
+          <input
+            className={styles.inputCtl}
+            type="search"
+            value={targetSearch}
+            onChange={(event) => setTargetSearch(event.target.value)}
+            placeholder={t('tasks.searchRecipients')}
+          />
+          {targetsLoading ? (
+            <div className={styles.targetNote}>{t('common.loading')}</div>
+          ) : (
+            <div className={styles.targetPicker}>
+              {visiblePeople.length > 0 && (
+                <div className={styles.targetSection}>
+                  <div className={styles.targetSectionTitle}>{t('tasks.people')}</div>
+                  {visiblePeople.map((person) => (
+                    <label key={person.key} className={styles.targetRow}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTargets.includes(person.key)}
+                        onChange={() => toggleTarget(person.key)}
+                      />
+                      <Avatar name={person.name} size={26} />
+                      <span>
+                        <strong>{person.name}</strong>
+                        <small>
+                          {person.self ? t('tasks.myself') : person.role}
+                          {person.cohort ? ` · ${person.cohort}` : ''}
+                        </small>
+                      </span>
+                      {person.assistant && <Chip tone="accent">{t('tasks.assistant')}</Chip>}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {visibleDepartments.length > 0 && (
+                <div className={styles.targetSection}>
+                  <div className={styles.targetSectionTitle}>{t('tasks.departments')}</div>
+                  {visibleDepartments.map((item) => (
+                    <label key={item.key} className={styles.targetRow}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTargets.includes(item.key)}
+                        onChange={() => toggleTarget(item.key)}
+                      />
+                      <Icon name="cohort" size={18} />
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>{item.branch || t('tasks.department')}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {visibleBranches.length > 0 && (
+                <div className={styles.targetSection}>
+                  <div className={styles.targetSectionTitle}>{t('tasks.branches')}</div>
+                  {visibleBranches.map((item) => (
+                    <label key={item.key} className={styles.targetRow}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTargets.includes(item.key)}
+                        onChange={() => toggleTarget(item.key)}
+                      />
+                      <Icon name="globe" size={18} />
+                      <span><strong>{item.name}</strong></span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {!targetsLoading && targetRows.length === 0 && (
+                <div className={styles.targetNote}>{t('tasks.noRecipients')}</div>
+              )}
+            </div>
+          )}
+          {assistants.length > 0 && (
+            <div className={styles.targetNote}>{t('tasks.assistantAvailable')}</div>
+          )}
+          <div className={styles.targetSummary}>
+            {selectedTargets.length} {t('tasks.selected')}
+          </div>
+        </div>
       </form>
     </Modal>
   );
@@ -648,6 +795,7 @@ export function TasksPage() {
 
   const listState = useAsync(() => taskService.getList(), [locale, reloadKey]);
   const filtersState = useAsync(() => taskService.getFilters(), [locale, reloadKey]);
+  const targetsState = useAsync(() => taskService.getTargets(), [locale, reloadKey]);
 
   const baseTasks = useMemo(
     () => [...added, ...(listState.data?.tasks ?? [])],
@@ -770,15 +918,21 @@ export function TasksPage() {
     ]);
     toast(`+ ${draft.title}`, 'success');
     try {
-      const created = await taskService.create({
+      const created = await taskService.createMany({
         title: draft.title,
+        description: draft.description,
         priority: draft.priority,
         ...(draft.deadline && draft.deadline !== '—' ? { deadlineLabel: draft.deadline } : {}),
         ...(draft.deadlineAt ? { deadlineAt: draft.deadlineAt } : {}),
+        targets: draft.targets,
       });
       // If the modal targeted a non-todo column, move the just-created task there.
-      if (created?.id != null && draft.state && draft.state !== 'todo') {
-        await taskService.setState(created.id, draft.state);
+      if (draft.state && draft.state !== 'todo') {
+        await Promise.all(
+          (created ?? [])
+            .filter((item) => item?.id != null)
+            .map((item) => taskService.setState(item.id, draft.state)),
+        );
       }
       // Reload so the persisted task (with its real id) replaces our scratch row,
       // and the filter-chip counts update. Clear the optimistic insert it now covers.
@@ -865,6 +1019,8 @@ export function TasksPage() {
         onClose={() => setModal(null)}
         columns={listState.data?.columns ?? []}
         projects={projects}
+        targets={targetsState.data}
+        targetsLoading={targetsState.loading}
         presetState={modal?.presetState}
         onCreate={createTask}
       />

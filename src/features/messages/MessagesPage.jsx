@@ -19,14 +19,15 @@ export function MessagesPage() {
   const liveMode = isApiMode();
   const [searchParams, setSearchParams] = useSearchParams();
   const state = useAsync(async () => {
-    const [staffThreads, cohorts] = await Promise.all([
+    const [staffThreads, contacts, cohorts] = await Promise.all([
       mgmt.getThreads(),
+      mgmt.getContacts(),
       liveMode ? Promise.resolve([]) : cohortService.list(),
     ]);
     const rosterPairs = await Promise.all(
       (cohorts ?? []).map(async (cohort) => [cohort, await cohortService.getRoster(cohort.id)]),
     );
-    return { staffThreads: staffThreads ?? [], cohorts: cohorts ?? [], rosterPairs };
+    return { staffThreads: staffThreads ?? [], contacts: contacts ?? [], cohorts: cohorts ?? [], rosterPairs };
   }, [locale]);
 
   const [openId, setOpenId] = useState(null);
@@ -73,7 +74,7 @@ export function MessagesPage() {
       {(data) => {
         const staffThreads = data.staffThreads.map((thread) => ({
           ...thread,
-          kind: thread.channel ? 'group' : 'management',
+          kind: thread.kind || (thread.channel ? 'group' : 'staff'),
           persisted: true,
           archived: threadState[thread.id]?.archived ?? Boolean(thread.archived),
           deleted: threadState[thread.id]?.deleted ?? false,
@@ -124,9 +125,7 @@ export function MessagesPage() {
         });
         const active =
           visibleThreads.find((thread) => thread.id === openId) ?? visibleThreads[0] ?? null;
-        const contacts = buildContacts(data, staffThreads, t).filter(
-          (contact) => !liveMode || contact.threadId,
-        );
+        const contacts = buildContacts(data, staffThreads, t);
 
         const openThread = (threadId) => {
           setOpenId(threadId);
@@ -176,7 +175,7 @@ export function MessagesPage() {
           }
         };
 
-        const createConversation = (contact) => {
+        const createConversation = async (contact) => {
           const existing = threads.find(
             (thread) =>
               thread.contactKey === contact.key ||
@@ -189,37 +188,48 @@ export function MessagesPage() {
             return;
           }
 
-          const thread = {
-            id: `local-${contact.key}`,
-            contactKey: contact.key,
-            name: contact.name,
-            role: contact.role,
-            groupName: contact.groupName,
-            memberCount: contact.memberCount,
-            kind: contact.kind,
-            online: contact.online,
-            unread: 0,
-            time: '',
-            lastMessage: t('messages.startConversation'),
-            profileType: contact.profileType,
-          };
-          setExtraThreads((current) => [thread, ...current]);
-          setOpenId(thread.id);
-          setMobileChatOpen(true);
-          setComposeOpen(false);
+          try {
+            const created = await mgmt.createThread({
+              participantIds: contact.participantIds,
+              name: contact.name,
+              subject: contact.kind === 'group' ? contact.name : '',
+              message: '',
+            });
+            const thread = {
+              ...created,
+              contactKey: contact.key,
+              name: created.name || contact.name,
+              role: created.role || contact.role,
+              groupName: contact.groupName,
+              memberCount: created.memberCount || contact.memberCount,
+              kind: created.kind || contact.kind,
+              online: contact.online,
+              unread: 0,
+              time: '',
+              lastMessage: t('messages.startConversation'),
+              profileType: contact.profileType,
+              persisted: true,
+            };
+            setExtraThreads((current) => [thread, ...current]);
+            setOpenId(thread.id);
+            setMobileChatOpen(true);
+            setComposeOpen(false);
+          } catch {
+            toast(t('common.error'), 'danger');
+          }
         };
 
         const sendMessage = (message) => {
           if (!active) return;
           appendMessage(active.id, message);
-          if (message.kind === 'text' && active.persisted) {
-            mgmt.sendMessage(active.id, message.text).catch(() => {
+          if (active.persisted) {
+            const request = message.file
+              ? mgmt.sendAttachment(active.id, message.file, message.text || '')
+              : mgmt.sendMessage(active.id, message.text);
+            request.then((saved) => {
               removeMessage(active.id, message.id);
-              toast(t('common.error'), 'danger');
-            });
-          } else if (active.persisted) {
-            const description = message.name || `${message.kind} · ${message.duration ?? ''}`;
-            mgmt.sendMessage(active.id, `[${description}]`).catch(() => {
+              appendMessage(active.id, saved);
+            }).catch(() => {
               removeMessage(active.id, message.id);
               toast(t('common.error'), 'danger');
             });
@@ -467,6 +477,7 @@ function Conversation({
         dir: 'out',
         kind,
         name: file.name,
+        file,
         size: formatBytes(file.size),
         url,
         time: t('messages.now'),
@@ -518,11 +529,17 @@ function Conversation({
         if (blob.size) {
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current.add(url);
+          const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+          const file = new File([blob], `voice-note-${Date.now()}.${extension}`, {
+            type: blob.type || 'audio/webm',
+          });
           onSend({
             id: `voice-${Date.now()}`,
             dir: 'out',
             kind: 'voice',
             url,
+            file,
+            name: file.name,
             duration,
             time: t('messages.now'),
             read: true,
@@ -605,7 +622,19 @@ function Conversation({
       <div className={styles.messageBody} ref={bodyRef}>
         <div className={styles.dayLabel}>{t('messages.today')}</div>
         {messages.map((message, index) => (
-          <MessageBubble key={message.id ?? index} message={message} thread={thread} />
+          <MessageBubble
+            key={message.id ?? index}
+            message={message}
+            thread={thread}
+            onDownload={async (attachment) => {
+              try {
+                const result = await mgmt.downloadAttachment(thread.id, attachment.key);
+                window.open(result.url, '_blank', 'noopener,noreferrer');
+              } catch {
+                toast(t('common.error'), 'danger');
+              }
+            }}
+          />
         ))}
         {!messages.length && (
           <div className={styles.emptyMessages}>
@@ -631,7 +660,7 @@ function Conversation({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/mp4,audio/webm,.pdf,.docx,.pptx"
           multiple
           hidden
           onChange={attachFiles}
@@ -673,7 +702,7 @@ function Conversation({
   );
 }
 
-function MessageBubble({ message, thread }) {
+function MessageBubble({ message, thread, onDownload }) {
   if (message.dir === 'card') {
     return <div className={styles.systemMessage}>{message.taskCard?.title}</div>;
   }
@@ -683,7 +712,7 @@ function MessageBubble({ message, thread }) {
     <div className={outgoing ? styles.outgoingRow : styles.incomingRow}>
       {!outgoing && thread.kind !== 'group' && <Avatar name={thread.name} size={26} />}
       <div className={`${styles.bubble} ${outgoing ? styles.outgoing : styles.incoming}`}>
-        {kind === 'text' && <div>{message.text}</div>}
+        {message.text && <div>{message.text}</div>}
         {kind === 'image' && <img src={message.url} alt={message.name} />}
         {kind === 'video' && <video src={message.url} controls preload="metadata" />}
         {kind === 'voice' && (
@@ -709,6 +738,18 @@ function MessageBubble({ message, thread }) {
         {(kind === 'image' || kind === 'video') && (
           <div className={styles.mediaName}>{message.name}</div>
         )}
+        {message.attachments?.map((attachment) => (
+          <button
+            type="button"
+            className={styles.downloadAttachment}
+            key={attachment.key}
+            onClick={() => onDownload?.(attachment)}
+          >
+            <span><Icon name="doc" size={17} /></span>
+            <strong>{attachment.name}</strong>
+            <Icon name="download" size={15} />
+          </button>
+        ))}
         <div className={styles.messageMeta}>
           {message.time}
           {outgoing && message.read ? ' ✓✓' : ''}
@@ -776,6 +817,7 @@ function NewChatModal({ open, onClose, contacts, onSelect, t }) {
   );
   const sections = [
     ['management', filtered.filter((contact) => contact.kind === 'management')],
+    ['staff', filtered.filter((contact) => contact.kind === 'staff')],
     ['myGroups', filtered.filter((contact) => contact.kind === 'group')],
     ['students', filtered.filter((contact) => contact.kind === 'student')],
   ];
@@ -835,6 +877,7 @@ function ProfileModal({ open, onClose, thread, messages, t }) {
 }
 
 function buildContacts(data, staffThreads, t) {
+  if (data.contacts?.length) return data.contacts;
   const staff = staffThreads
     .filter((thread) => !thread.channel)
     .map((thread) => ({

@@ -95,6 +95,9 @@ export class ITaskRepository {
   listFilters() {
     return ni('ITaskRepository.listFilters');
   }
+  listTargets() {
+    return ni('ITaskRepository.listTargets');
+  }
   /** @param {string|number} _id @param {string} _state */
   setState(_id, _state) {
     return ni('ITaskRepository.setState');
@@ -106,6 +109,10 @@ export class ITaskRepository {
   /** @param {object} _draft @returns {Promise<object>} created task */
   create(_draft) {
     return ni('ITaskRepository.create');
+  }
+  /** @param {object} _draft @returns {Promise<object[]>} one task per selected target */
+  createMany(_draft) {
+    return ni('ITaskRepository.createMany');
   }
 }
 
@@ -156,11 +163,17 @@ export class IPrintRepository {
 }
 
 export class ISurveyRepository {
+  getCapabilities() {
+    return ni('ISurveyRepository.getCapabilities');
+  }
   listActive() {
     return ni('ISurveyRepository.listActive');
   }
   listHistory() {
     return ni('ISurveyRepository.listHistory');
+  }
+  listManaged() {
+    return ni('ISurveyRepository.listManaged');
   }
   /** @param {string} _id */
   getDetail(_id) {
@@ -178,9 +191,27 @@ export class ISurveyRepository {
   skip(_id) {
     return ni('ISurveyRepository.skip');
   }
+  create(_input) {
+    return ni('ISurveyRepository.create');
+  }
+  publish(_id) {
+    return ni('ISurveyRepository.publish');
+  }
+  close(_id) {
+    return ni('ISurveyRepository.close');
+  }
+  remove(_id) {
+    return ni('ISurveyRepository.remove');
+  }
+  getResults(_id) {
+    return ni('ISurveyRepository.getResults');
+  }
 }
 
 export class IMgmtRepository {
+  listContacts() {
+    return ni('IMgmtRepository.listContacts');
+  }
   listThreads() {
     return ni('IMgmtRepository.listThreads');
   }
@@ -192,7 +223,15 @@ export class IMgmtRepository {
   sendMessage(_threadId, _text) {
     return ni('IMgmtRepository.sendMessage');
   }
-  /** @param {{name:string,message:string}} _input @returns {Promise<object>} created thread */
+  /** Upload and send a real attachment in an existing thread. */
+  sendAttachment(_threadId, _file, _body = '') {
+    return ni('IMgmtRepository.sendAttachment');
+  }
+  /** Return a short-lived download URL for one scoped message attachment. */
+  downloadAttachment(_threadId, _key) {
+    return ni('IMgmtRepository.downloadAttachment');
+  }
+  /** @param {{name:string,message:string,participantIds:Array<number|string>,subject?:string}} _input @returns {Promise<object>} created thread */
   createThread(_input) {
     return ni('IMgmtRepository.createThread');
   }
@@ -236,9 +275,16 @@ export class IMaterialRepository {
   getStorage() {
     return ni('IMaterialRepository.getStorage');
   }
+  listTargets() {
+    return ni('IMaterialRepository.listTargets');
+  }
   /** @param {object} _input {title,kind,sizeBytes?,meta?} @returns {Promise<object>} created material */
   create(_input) {
     return ni('IMaterialRepository.create');
+  }
+  /** @param {string} _id @returns {Promise<{url:string}>} */
+  download(_id) {
+    return ni('IMaterialRepository.download');
   }
   /** @param {string} _id */
   remove(_id) {

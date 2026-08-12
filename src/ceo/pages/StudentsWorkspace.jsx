@@ -290,7 +290,7 @@ function StudentDirectoryCard({ student, cohort, onNav, branchId, access }) {
       </dl>
       <footer>
         <span>{student.location || student.phone || student.username || 'Contact not recorded'}</span>
-        {student.is_blocked && <StatusPill value="Needs enrollment review" tone="danger" />}
+        {!access.teacherScoped && student.is_blocked && <StatusPill value="Needs enrollment review" tone="danger" />}
         {recordPath && <RouteLink className="fw-card-open" to={recordPath} onNav={onNav} aria-label={`Open ${student.full_name || 'student'} record`}>Open record {cloneElement(Icons.chevR, { size: 14 })}</RouteLink>}
       </footer>
     </article>
@@ -310,12 +310,13 @@ function StudentDirectory({ route, onNav, branchId, user }) {
   const canViewGroups = canUseCapability(user, 'cohorts:read');
   const canViewTeachers = !teacherScoped && canUseCapability(user, 'teachers:read');
   const canWrite = canUseCapability(user, 'students:write');
-  const students = useWorkspaceData('/api/v1/students/', listParams(filters, branchId, page));
+  const scopedFilters = teacherScoped ? { ...filters, branch: '', teacher: '', blocked: '' } : filters;
+  const students = useWorkspaceData('/api/v1/students/', listParams(scopedFilters, branchId, page));
   const branches = useWorkspaceData('/api/v1/org/branches/', { page_size: 100 }, { enabled: canViewBranches && !branchId });
   const cohorts = useWorkspaceData('/api/v1/cohorts/', { page_size: 100, branch: branchId || filters.branch || undefined }, { enabled: canViewGroups });
   const teachers = useWorkspaceData('/api/v1/teachers/', { page_size: 100, branch: branchId || filters.branch || undefined }, { enabled: canViewTeachers });
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const advancedCount = ['teacher', 'level', 'gender', 'location', 'blocked', 'joined_after', 'joined_before', 'age_min', 'age_max', 'ordering']
+  const advancedCount = ['teacher', 'level', 'gender', 'location', ...(teacherScoped ? [] : ['blocked']), 'joined_after', 'joined_before', 'age_min', 'age_max', 'ordering']
     .filter((key) => Boolean(filters[key])).length;
   const levels = [...new Set(students.rows.map((student) => student.academic_level).filter(Boolean))].sort();
   const locations = [...new Set(students.rows.map((student) => student.location).filter(Boolean))].sort();
@@ -365,7 +366,7 @@ function StudentDirectory({ route, onNav, branchId, user }) {
           <FilterField label="Level"><DeferredFilterInput list="student-levels" maxLength={80} value={filters.level} placeholder="Any level" onCommit={(value) => setRouteFilter(filters, 'level', value, basePath, onNav, { replace: true })} /><datalist id="student-levels">{levels.map((level) => <option value={level} key={level} />)}</datalist></FilterField>
           <FilterField label="Recorded location"><DeferredFilterInput list="student-locations" maxLength={160} value={filters.location} placeholder="Any location" onCommit={(value) => setRouteFilter(filters, 'location', value, basePath, onNav, { replace: true })} /><datalist id="student-locations">{locations.map((location) => <option value={location} key={location} />)}</datalist></FilterField>
           <FilterField label="Gender"><select value={filters.gender} onChange={(event) => setRouteFilter(filters, 'gender', event.target.value, basePath, onNav)}><option value="">Any gender</option><option value="f">Female</option><option value="m">Male</option></select></FilterField>
-          <FilterField label="Enrollment review"><select value={filters.blocked} onChange={(event) => setRouteFilter(filters, 'blocked', event.target.value, basePath, onNav)}><option value="">Any</option><option value="true">Needs review</option><option value="false">No hold</option></select></FilterField>
+          {!teacherScoped && <FilterField label="Enrollment review"><select value={filters.blocked} onChange={(event) => setRouteFilter(filters, 'blocked', event.target.value, basePath, onNav)}><option value="">Any</option><option value="true">Needs review</option><option value="false">No hold</option></select></FilterField>}
           <FilterField label="Joined after"><input type="date" value={filters.joined_after} max={filters.joined_before || undefined} onChange={(event) => setRouteFilter(filters, 'joined_after', event.target.value, basePath, onNav)} /></FilterField>
           <FilterField label="Joined before"><input type="date" value={filters.joined_before} min={filters.joined_after || undefined} onChange={(event) => setRouteFilter(filters, 'joined_before', event.target.value, basePath, onNav)} /></FilterField>
           <FilterField label="Minimum age"><DeferredFilterInput type="number" min="0" max="120" value={filters.age_min} onCommit={(value) => setRouteFilter(filters, 'age_min', value, basePath, onNav, { replace: true })} /></FilterField>
@@ -376,7 +377,7 @@ function StudentDirectory({ route, onNav, branchId, user }) {
       <CoverageBar state={correctingPage ? { ...students, pending: true, rows: [] } : students} label="students" filtered={activeCount > 0} pageLimited={pages > 1} />
       <WorkspaceState state={correctingPage ? { ...students, pending: true, rows: [] } : students} empty={!students.rows.length}>
         <div className="fw-person-grid" aria-label="Student directory">
-          {students.rows.map((student, index) => <StudentDirectoryCard key={cleanId(student.id) || `student-${index}`} student={student} cohort={cohortById.get(cleanId(student.current_cohort))} onNav={onNav} branchId={branchId} access={{ branches: canViewBranches, groups: canViewGroups, teachers: canViewTeachers, relationshipsComplete: cohorts.complete }} />)}
+          {students.rows.map((student, index) => <StudentDirectoryCard key={cleanId(student.id) || `student-${index}`} student={student} cohort={cohortById.get(cleanId(student.current_cohort))} onNav={onNav} branchId={branchId} access={{ branches: canViewBranches, groups: canViewGroups, teachers: canViewTeachers, relationshipsComplete: cohorts.complete, teacherScoped }} />)}
         </div>
       </WorkspaceState>
       {!correctingPage && <WorkspacePagination label="students" page={page} pages={pages} total={students.total} loading={students.loading} onPage={(nextPage) => onNav(directoryRoute(basePath, filters, nextPage), { scroll: false })} />}
@@ -583,7 +584,7 @@ function StudentAdministration({ id, student, branchId, onNav, canManageGroups }
     }
   };
   return (
-    <DetailSection eyebrow="Authorized changes" title="Manage enrollment and access" description="Each action uses the backend’s scoped transaction and audit trail. Identity edits remain separate from lifecycle changes.">
+    <DetailSection eyebrow="Authorized changes" title="Manage enrollment and access" description="Each action is limited to your assigned students and recorded for review. Identity edits remain separate from lifecycle changes.">
       {error ? <div className="fw-form-error" role="alert">{mutationMessage(error, 'The student action could not be completed.')}</div> : null}
       {credentials ? <div className="fw-credential-reveal" role="status"><span><strong>One-time credentials</strong><small>Give these directly to the student over a trusted channel. A password change is required at first sign-in.</small></span><code>{credentials.username}</code><code>{credentials.temporary_password}</code><ActionButton onClick={copyCredentials}>Copy securely</ActionButton><button type="button" onClick={() => setCredentials(null)} aria-label="Hide credentials">{cloneElement(Icons.x, { size: 15 })}</button></div> : null}
       <div className="fw-admin-grid">
@@ -627,6 +628,7 @@ function StudentDetail({ id, section, onNav, branchId, user }) {
   const canSchedule = canUseCapability(user, 'schedule:read');
   const canWrite = canUseCapability(user, 'students:write');
   const canManageGroups = canUseCapability(user, 'cohorts:write');
+  const teacherScoped = user?.accountKind === 'teacher';
   const leadership = useWorkspaceData(`/api/v1/students/${id}/leadership-profile/`);
   const profile = leadershipProfileFor(leadership.data, id);
   const leadershipStatus = Number(leadership.error?.status);
@@ -735,7 +737,7 @@ function StudentDetail({ id, section, onNav, branchId, user }) {
         <ProfileHero
           name={data.full_name}
           eyebrow="Student profile"
-          meta={<><StatusPill value={status.label} tone={status.tone} />{data.student_id && <span>{data.student_id}</span>}{branchPath && canBranches && <RouteLink to={branchPath} onNav={onNav}>{data.branch_name || `Branch ${studentBranchId}`}</RouteLink>}{groupPath && canGroups && <RouteLink to={groupPath} onNav={onNav}>{data.current_cohort_name || `Group ${cohortId}`}</RouteLink>}{data.is_blocked && <StatusPill value="Needs enrollment review" tone="danger" />}</>}
+          meta={<><StatusPill value={status.label} tone={status.tone} />{data.student_id && <span>{data.student_id}</span>}{branchPath && canBranches && <RouteLink to={branchPath} onNav={onNav}>{data.branch_name || `Branch ${studentBranchId}`}</RouteLink>}{groupPath && canGroups && <RouteLink to={groupPath} onNav={onNav}>{data.current_cohort_name || `Group ${cohortId}`}</RouteLink>}{!teacherScoped && data.is_blocked && <StatusPill value="Needs enrollment review" tone="danger" />}</>}
           actions={<>{canWrite && <LinkButton to={`${base}/edit`} onNav={onNav} icon={Icons.settings}>Edit</LinkButton>}<ActionButton onClick={() => window.print()}>{cloneElement(Icons.doc, { size: 14 })} Print</ActionButton><LinkButton to={branchId ? `branches/${branchId}/students` : 'students/directory'} onNav={onNav}>Back to students</LinkButton></>}
         />
         <WorkspaceTabs label="Student record" items={availableSections} active={active} basePath={base} onNav={onNav} />
@@ -763,18 +765,18 @@ function StudentDetail({ id, section, onNav, branchId, user }) {
                   : '\u2014'}</strong><small>{profile
                 ? aggregateAttendanceCount === null
                   ? 'Attendance coverage is unavailable'
-                  : `${formatBusinessNumber(aggregateAttendanceCount)} non-excused outcomes in the leadership window`
+                  : `${formatBusinessNumber(aggregateAttendanceCount)} recorded lessons in this reporting period`
                 : attendanceAvailable
                   ? `${formatBusinessNumber(counted)} recognized non-excused outcomes from ${formatBusinessNumber(attendance.rows.length)} loaded`
                   : 'Attendance information is unavailable'}</small></div>}
               {viewLearning && <div className="fw-summary-card"><span>Learning records</span><strong>{profile ? displayCount(aggregateLearningEvidence) : gradesAvailable ? displayCount(grades.total) : '\u2014'}</strong><small>{profile ? aggregateLearningEvidence === null ? 'Learning evidence is outside this exact scope' : 'Recent published grades and exam results' : gradesAvailable ? 'Grade register total' : 'Learning information is unavailable'}</small></div>}
-              {viewFinance && <div className="fw-summary-card"><span>Issued billing</span><strong>{profile ? leadershipMoney(aggregateFinance?.window?.billed) : invoicesExact ? money(invoiceTotal) : '\u2014'}</strong><small>{profile ? 'Permission-pruned value in the leadership window' : invoiceCoverageMessage || (invoiceTotal === null ? 'One or more invoice amounts are unavailable' : `${formatBusinessNumber(issuedInvoices.length)} issued invoices`)}</small></div>}
+              {viewFinance && <div className="fw-summary-card"><span>Issued billing</span><strong>{profile ? leadershipMoney(aggregateFinance?.window?.billed) : invoicesExact ? money(invoiceTotal) : '\u2014'}</strong><small>{profile ? 'Visible value in this reporting period' : invoiceCoverageMessage || (invoiceTotal === null ? 'One or more invoice amounts are unavailable' : `${formatBusinessNumber(issuedInvoices.length)} issued invoices`)}</small></div>}
               {viewFinance && <div className="fw-summary-card"><span>Outstanding balance</span><strong>{profile ? leadershipMoney(aggregateFinance?.all_time?.outstanding) : invoicesExact ? money(invoiceOutstanding) : '\u2014'}</strong><small>{profile ? `${displayCount(aggregateFinance?.all_time?.open_invoice_count)} open invoices across recorded history` : !invoicesAvailable ? 'Balance information is unavailable' : invoiceCoverageMessage || (invoiceOutstanding === null ? 'One or more balances are unavailable' : 'Invoice value less verified allocations')}</small></div>}
             </div>
             {profile && <div className="fw-leadership-source" role="note">
               <span className="fw-leadership-source-icon" aria-hidden="true">{cloneElement(Icons.shield, { size: 17 })}</span>
-              <span><strong>Permission-pruned leadership snapshot</strong><small>{formatOrganizationDate(profile.window?.date_from, { dateOnly: true }) || 'Window start unavailable'} through {formatOrganizationDate(profile.window?.date_to, { dateOnly: true }) || 'window end unavailable'} · {profile.window?.timezone || 'organization timezone unavailable'}</small></span>
-              <StatusPill value="Exact student scope" tone="success" />
+              <span><strong>{teacherScoped ? 'Teaching record snapshot' : 'Authorized student snapshot'}</strong><small>{formatOrganizationDate(profile.window?.date_from, { dateOnly: true }) || 'Start date unavailable'} through {formatOrganizationDate(profile.window?.date_to, { dateOnly: true }) || 'end date unavailable'} · {profile.window?.timezone || 'organization timezone'}</small></span>
+              <StatusPill value={teacherScoped ? 'Assigned student' : 'Authorized scope'} tone="success" />
             </div>}
             <DetailSection eyebrow="Identity" title="Student and contact information">
               <DetailGrid columns={4} fields={[
@@ -818,7 +820,7 @@ function StudentDetail({ id, section, onNav, branchId, user }) {
             ]} /></DetailSection>
           </>}
           {active === 'learning' && <>
-            {aggregateLearning && <DetailSection eyebrow="Leadership snapshot" title="Current learning position" description="Bounded recent evidence from the same permission-pruned student snapshot."><DetailGrid columns={4} fields={[
+            {aggregateLearning && <DetailSection eyebrow="Learning snapshot" title="Current learning position" description="Recent learning evidence available for this student."><DetailGrid columns={4} fields={[
               { label: 'Teachers', value: Array.isArray(aggregateLearning.teachers) ? aggregateLearning.teachers.map((teacher) => teacher.name).join(', ') : null, wide: true },
               { label: 'Subjects', value: (aggregateLearning.subjects || []).map((subject) => subject.name).join(', '), wide: true },
               { label: 'Open assignments', value: finiteCount(aggregateLearning.assignments?.open) },
@@ -981,7 +983,7 @@ export function StudentsPage({ route, onNav, branchId, user }) {
   const basePath = branchId ? `branches/${branchId}/students` : 'students';
   return (
     <div className="fw-page">
-      {!branchId && <WorkspaceHeader eyebrow="People" title="Students" description={teacherScoped ? 'Search students enrolled in your assigned groups, apply decision-ready filters, and open every section permitted for your teaching role.' : 'Search the student portfolio within your permitted scope, apply decision-ready filters, and open every available learning, family, attendance, or finance section.'} actions={<>{canWrite && <LinkButton to="students/new" onNav={onNav} icon={Icons.plus} tone="primary">Create student</LinkButton>}{!teacherScoped && <LinkButton to="students/directory?group=none" onNav={onNav} icon={Icons.flag}>Unassigned students</LinkButton>}</>} />}
+      {!branchId && <WorkspaceHeader eyebrow="People" title="Students" description={teacherScoped ? 'Only students currently enrolled in groups assigned to you are shown here. Open a student to review learning and attendance.' : 'Search the student portfolio within your permitted scope and open every available learning, family, attendance, or finance section.'} actions={<>{canWrite && <LinkButton to="students/new" onNav={onNav} icon={Icons.plus} tone="primary">Create student</LinkButton>}{!teacherScoped && <LinkButton to="students/directory?group=none" onNav={onNav} icon={Icons.flag}>Unassigned students</LinkButton>}</>} />}
       {!branchId && <WorkspaceTabs label="Students" items={availableSections} active={section} basePath={basePath} onNav={onNav} />}
       <div className="fw-layout-content">
         {section === 'directory' && <StudentDirectory route={route} onNav={onNav} branchId={branchId} user={user} />}
