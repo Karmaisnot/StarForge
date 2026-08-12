@@ -931,6 +931,8 @@ export default {
     fileHint: 'Documents, PDFs, images, audio, and video',
     displayTitle: 'Display title',
     audience: 'Who can see it',
+    noDestination: 'No approved destination is available',
+    noDestinationHint: 'Ask a manager to assign you to a group or prepare the shared library.',
     allowDownload: 'Allow downloads',
     allowDownloadHint: 'Students may save a copy to their device.',
     viewOnlyHint: 'Students may view it in the workspace but cannot download it.',

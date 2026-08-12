@@ -928,6 +928,8 @@ export default {
     fileHint: 'Hujjat, PDF, rasm, audio va video',
     displayTitle: 'Ko‘rinadigan nom',
     audience: 'Kim ko‘ra oladi',
+    noDestination: 'Ruxsat etilgan manzil topilmadi',
+    noDestinationHint: 'Rahbardan sizni guruhga biriktirish yoki umumiy kutubxonani tayyorlashni so‘rang.',
     allowDownload: 'Yuklab olishga ruxsat',
     allowDownloadHint: 'O‘quvchilar qurilmasiga nusxa saqlashi mumkin.',
     viewOnlyHint: 'O‘quvchi ish maydonida ko‘radi, ammo yuklab ololmaydi.',

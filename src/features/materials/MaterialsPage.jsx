@@ -80,13 +80,23 @@ function UploadModal({ open, targets, busy, onClose, onUpload }) {
         </label>
         <label className={styles.field}>
           <span>{t('materials.audience')}</span>
-          <select value={targetKey} onChange={(event) => setTargetKey(event.target.value)}>
-            {targets.map((target) => (
-              <option key={target.key} value={target.key}>
-                {target.label}{target.detail ? ` · ${target.detail}` : ''}
-              </option>
-            ))}
-          </select>
+          {targets.length > 0 ? (
+            <select value={targetKey} onChange={(event) => setTargetKey(event.target.value)}>
+              {targets.map((target) => (
+                <option key={target.key} value={target.key}>
+                  {target.label}{target.detail ? ` · ${target.detail}` : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className={styles.noDestination} role="status">
+              <Icon name="shield" size={18} />
+              <span>
+                <strong>{t('materials.noDestination')}</strong>
+                <small>{t('materials.noDestinationHint')}</small>
+              </span>
+            </div>
+          )}
         </label>
         <label className={styles.switchRow}>
           <span>
@@ -189,11 +199,9 @@ export function MaterialsPage() {
             title={t('materials.title')}
             subtitle={t('materials.subtitle')}
             right={
-              data.targets.length > 0 ? (
-                <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>
-                  {t('materials.upload')}
-                </Button>
-              ) : null
+              <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>
+                {t('materials.upload')}
+              </Button>
             }
           />
 
@@ -303,6 +311,9 @@ export function MaterialsPage() {
                 <Icon name="book" size={28} />
                 <strong>{t('materials.empty')}</strong>
                 <span>{t('materials.emptyHint')}</span>
+                <Button variant="soft" icon="upload" onClick={() => setUploadOpen(true)}>
+                  {t('materials.upload')}
+                </Button>
               </div>
             )}
           </Card>

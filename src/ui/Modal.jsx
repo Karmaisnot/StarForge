@@ -11,7 +11,7 @@ const FOCUSABLE =
  * focus inside the dialog while open, and restores focus to the trigger on close.
  * @param {{ open: boolean, title?: string, onClose: Function, children?: any, footer?: any }} props
  */
-export function Modal({ open, title, onClose, children, footer }) {
+export function Modal({ open, title, onClose, children, footer, size = 'default' }) {
   const { t } = useT();
   const titleId = useId();
   const dialogRef = useRef(null);
@@ -84,6 +84,7 @@ export function Modal({ open, title, onClose, children, footer }) {
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-size={size}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

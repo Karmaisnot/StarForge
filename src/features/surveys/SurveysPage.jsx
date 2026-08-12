@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
 import { Button, Chip, Icon, ProgressBar, StarMark } from '@/ui';
@@ -8,41 +8,24 @@ import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import styles from './surveys.module.css';
-import { FormsDirectory, SurveyResults } from './FormsWorkspace.jsx';
 
 export function SurveysPage() {
   const { surveyId } = useParams();
-  const [searchParams] = useSearchParams();
-  if (surveyId && searchParams.get('view') === 'results') {
-    return <SurveyResults surveyId={surveyId} />;
-  }
-  return surveyId ? <SurveyRunner surveyId={surveyId} /> : <FormsDirectory />;
+  return surveyId ? <SurveyRunner surveyId={surveyId} /> : <SurveyDirectory />;
 }
 
-export function LegacySurveyDirectory() {
+export function SurveyDirectory() {
   const { surveys } = useServices();
   const { t, locale } = useT();
-  const toast = useToast();
   const navigate = useNavigate();
-  const [reloadKey, setReloadKey] = useState(0);
   const state = useAsync(
     () =>
       Promise.all([surveys.getActive(), surveys.getHistory()]).then(([active, history]) => ({
         active: active ?? [],
         history: history ?? [],
       })),
-    [locale, reloadKey],
+    [locale],
   );
-
-  const skip = async (survey) => {
-    try {
-      await surveys.skip(survey.id);
-      toast(t('surveys.skipped'), 'success');
-      setReloadKey((key) => key + 1);
-    } catch {
-      toast(t('common.error'), 'danger');
-    }
-  };
 
   return (
     <AsyncBoundary state={state}>
@@ -109,9 +92,6 @@ export function LegacySurveyDirectory() {
                     <Icon name="clock" size={14} /> {survey.estimate}
                   </span>
                   <div>
-                    <Button variant="ghost" onClick={() => skip(survey)}>
-                      {t('surveys.skip')}
-                    </Button>
                     <Button
                       variant="primary"
                       icon="arrowR"

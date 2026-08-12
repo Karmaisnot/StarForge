@@ -533,6 +533,8 @@ function NewTaskModal({
   const [deadline, setDeadline] = useState('');
   const [targetSearch, setTargetSearch] = useState('');
   const [selectedTargets, setSelectedTargets] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Re-seed the column when the modal is opened from a specific Kanban lane.
   useEffect(() => {
@@ -544,9 +546,18 @@ function NewTaskModal({
     setState(presetState ?? 'todo');
     setDeadline('');
     setTargetSearch('');
+    setSelectedTargets([]);
+    setSubmitting(false);
+    setFormError('');
+  }, [open, presetState]);
+
+  // Recipient data can arrive after the modal opens. Select the teacher's own
+  // account without resetting work they have already typed into the form.
+  useEffect(() => {
+    if (!open) return;
     const self = targets?.people?.find((person) => person.self);
-    setSelectedTargets(self ? [self.key] : []);
-  }, [open, presetState, targets]);
+    if (self) setSelectedTargets((current) => (current.length ? current : [self.key]));
+  }, [open, targets]);
 
   const targetRows = useMemo(
     () => [
@@ -574,31 +585,35 @@ function NewTaskModal({
     );
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    onCreate({
-      title: title.trim(),
-      description: description.trim(),
-      project: project || projects[0] || t('tasks.project'),
-      priority,
-      state,
-      deadline: deadline
-        ? new Intl.DateTimeFormat(locale, {
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          }).format(new Date(deadline))
-        : '—',
-      deadlineAt: deadline ? new Date(deadline).toISOString() : null,
-      targets: targetRows.filter((target) => selectedTargets.includes(target.key)),
-    });
-    setTitle('');
-    setProject('');
-    setPriority('P2');
-    setDeadline('');
-    onClose();
+    if (!title.trim() || submitting || selectedTargets.length === 0) return;
+    setSubmitting(true);
+    setFormError('');
+    try {
+      const saved = await onCreate({
+        title: title.trim(),
+        description: description.trim(),
+        project: project || projects[0] || t('tasks.project'),
+        priority,
+        state,
+        deadline: deadline
+          ? new Intl.DateTimeFormat(locale, {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(new Date(deadline))
+          : '—',
+        deadlineAt: deadline ? new Date(deadline).toISOString() : null,
+        targets: targetRows.filter((target) => selectedTargets.includes(target.key)),
+      });
+      if (saved !== false) onClose();
+    } catch (error) {
+      setFormError(error?.message || t('common.error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -606,6 +621,7 @@ function NewTaskModal({
       open={open}
       onClose={onClose}
       title={t('common.newTask')}
+      size="wide"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -615,9 +631,9 @@ function NewTaskModal({
             variant="primary"
             icon="plus"
             onClick={submit}
-            disabled={!title.trim() || selectedTargets.length === 0}
+            disabled={!title.trim() || selectedTargets.length === 0 || submitting}
           >
-            {t('common.newTask')}
+            {submitting ? t('common.loading') : t('common.newTask')}
           </Button>
         </>
       }
@@ -767,6 +783,7 @@ function NewTaskModal({
             {selectedTargets.length} {t('tasks.selected')}
           </div>
         </div>
+        {formError && <div className={styles.formError} role="alert">{formError}</div>}
       </form>
     </Modal>
   );
@@ -803,6 +820,28 @@ export function TasksPage() {
   );
   const projects = useMemo(() => [...new Set(baseTasks.map((t) => t.project))], [baseTasks]);
 
+  // Keep an optimistic lane/status visible until a fresh server list confirms
+  // it. Clearing immediately after POST caused the card to jump back to its old
+  // lane for one render and then forward again.
+  useEffect(() => {
+    if (!listState.data?.tasks) return;
+    setOverrides((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const task of listState.data.tasks) {
+        const override = next[task.id];
+        if (override?.state && override.state === task.state) {
+          const remaining = { ...override };
+          delete remaining.state;
+          if (Object.keys(remaining).length) next[task.id] = remaining;
+          else delete next[task.id];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [listState.data]);
+
   const tasks = useMemo(() => {
     return baseTasks
       .map((task, index) => ({
@@ -828,13 +867,8 @@ export function TasksPage() {
     toast(`“${String(task.title).slice(0, 22)}…” → ${next}`);
     try {
       await taskService.setState(task.id, next);
-      // Server truth now reflects the move; drop the scratch override and reload
-      // so the board state AND the filter-chip counts reconcile.
-      setOverrides((o) => {
-        // eslint-disable-next-line no-unused-vars
-        const { [task.id]: _drop, ...rest } = o;
-        return rest;
-      });
+      // Leave the optimistic override in place while the new list is fetched.
+      // The reconciliation effect above removes it only after confirmation.
       refetch();
     } catch {
       // Roll the optimistic move back and surface the failure.
@@ -888,7 +922,8 @@ export function TasksPage() {
     toast(`“${String(moving.title).slice(0, 24)}” → ${targetState}`, 'success');
     try {
       await taskService.move(moving.id, targetState, targetIndex);
-      setOverrides({});
+      // Preserve the optimistic layout until the refreshed list confirms the
+      // server-side status, preventing a stale-frame bounce.
       refetch();
     } catch {
       setOverrides(before);
@@ -916,7 +951,6 @@ export function TasksPage() {
       },
       ...list,
     ]);
-    toast(`+ ${draft.title}`, 'success');
     try {
       const created = await taskService.createMany({
         title: draft.title,
@@ -938,10 +972,13 @@ export function TasksPage() {
       // and the filter-chip counts update. Clear the optimistic insert it now covers.
       setAdded((list) => list.filter((x) => x.id !== tempId));
       refetch();
-    } catch {
+      toast(`+ ${draft.title}`, 'success');
+      return true;
+    } catch (error) {
       // Drop the optimistic row and surface the failure.
       setAdded((list) => list.filter((x) => x.id !== tempId));
-      toast(t('common.error'), 'danger');
+      toast(error?.message || t('common.error'), 'danger');
+      throw error;
     }
   };
 

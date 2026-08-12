@@ -65,6 +65,7 @@ const COPY = {
     form: 'So‘rovnoma',
     files: 'fayl',
     queued: 'Navbatda',
+    uploadedDocument: 'Yuklangan hujjat',
     allStudents: 'Barcha o‘quvchilarim',
     entireCenter: 'Butun ta’lim markazi',
   },
@@ -99,6 +100,7 @@ const COPY = {
     form: 'Опрос',
     files: 'файлов',
     queued: 'В очереди',
+    uploadedDocument: 'Загруженный документ',
     allStudents: 'Все мои ученики',
     entireCenter: 'Весь учебный центр',
   },
@@ -133,6 +135,7 @@ const COPY = {
     form: 'Form',
     files: 'files',
     queued: 'Queued',
+    uploadedDocument: 'Uploaded document',
     allStudents: 'All my students',
     entireCenter: 'Entire education center',
   },
@@ -354,7 +357,10 @@ function mapRosterMember(member, attendanceByStudent) {
 function mapTask(task) {
   const session = getSessionSnapshot().user ?? {};
   const principalKind = session.principal_kind ?? session.account_kind ?? '';
-  const principalId = session.id;
+  // Role-native /users/me returns the active staff/teacher profile id as `id`.
+  // Keep the explicit alias for forward compatibility with session payloads that
+  // also expose `principal_id`.
+  const principalId = session.principal_id ?? session.id;
   const assignee = task.assignee_principal ?? null;
   const creator = task.created_by ?? null;
   const isMine =
@@ -516,36 +522,50 @@ function mapCard(card, typeById) {
 function mapPrinter(printer) {
   const capabilities =
     printer.capabilities && typeof printer.capabilities === 'object' ? printer.capabilities : {};
-  const sizes = capabilities.paper_sizes ?? capabilities.sizes ?? capabilities.formats ?? '—';
+  const sizes =
+    capabilities.paper_sizes ??
+    capabilities.paper ??
+    capabilities.sizes ??
+    capabilities.formats ??
+    '—';
   return {
     id: String(printer.id),
+    branchId: printer.branch == null ? null : String(printer.branch),
     name: [printer.name, printer.model_name].filter(Boolean).join(' · ') || `#${printer.id}`,
     location: printer.branch ? `${copy().branch} #${printer.branch}` : '—',
     status: printer.is_active ? 'free' : 'locked',
     eta: printer.is_active ? '—' : '—',
     queue: 0,
     color: Boolean(capabilities.color || capabilities.colour),
+    duplex: Boolean(capabilities.duplex),
     sizes: Array.isArray(sizes) ? sizes.join(' · ') : String(sizes),
     accent: printer.is_active ? 'var(--sf-success)' : 'var(--sf-muted)',
   };
 }
 
 function mapPrintJob(job) {
-  const now = job.status === 'printing';
+  const status = String(job.status || 'queued');
+  const now = status === 'printing';
   return {
     id: String(job.id),
-    doc: job.source
-      ? `${job.source}${job.source_id ? ` #${job.source_id}` : ''}`
-      : `Job #${job.id}`,
+    source: job.source || '',
+    sourceId: job.source_id == null ? null : String(job.source_id),
+    doc: job.source === 'upload' ? copy().uploadedDocument : `${job.source || 'print'} #${job.source_id || job.id}`,
     icon: 'doc',
     copies: toNumber(job.copies, 1),
+    pages: toNumber(job.pages, 0),
+    color: Boolean(job.color),
+    duplex: Boolean(job.duplex),
     size: `${job.pages ?? '—'} pages${job.color ? ' · color' : ''}`,
+    printerId: job.printer == null ? null : String(job.printer),
     printer: job.printer ? `#${job.printer}` : '—',
     progress: job.pages
       ? Math.min(100, Math.round((toNumber(job.pages_printed) / job.pages) * 100))
       : 0,
-    eta: job.last_error || (now ? 'Printing' : copy().queued),
-    state: now ? 'now' : 'queued',
+    eta: now ? 'Printing' : copy().queued,
+    state: now ? 'now' : status,
+    status,
+    createdAt: job.created_at,
   };
 }
 
@@ -1069,22 +1089,37 @@ export class HttpTaskRepository extends ITaskRepository {
 
   async listTargets() {
     const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    const membership = asList(me.role_memberships)[0] ?? {};
+    const selfBranchId = me.branch ?? membership.branch ?? null;
     const self = {
-      key: `${me.principal_kind}:${me.id}`,
+      key: `${me.principal_kind}:${me.principal_id ?? me.id}`,
       kind: me.principal_kind,
-      id: me.id,
+      id: me.principal_id ?? me.id,
+      branchId: selfBranchId,
       name: displayName(me),
       role: me.role_memberships?.[0]?.account_type_name || copy().me,
       self: true,
     };
     if (me.principal_kind === 'teacher') {
-      const cohorts = asList(await httpClient.get('cohorts/?page_size=100'));
+      // Creating a personal task must stay available even when the optional
+      // cohort directory is temporarily unavailable. Assistant recipients are
+      // additive and come only from this exact teacher's assigned cohorts.
+      const activeTeacherId = String(me.principal_id ?? me.id);
+      const cohorts = asList(
+        await optional(() => httpClient.get('cohorts/?page_size=100'), []),
+      ).filter(
+        (cohort) =>
+          String(cohort.primary_teacher ?? '') === activeTeacherId ||
+          asList(cohort.teachers ?? cohort.co_teachers).some(
+            (assignment) => String(assignment.teacher ?? '') === activeTeacherId,
+          ),
+      );
       const assistants = new Map();
       for (const cohort of cohorts) {
         for (const assignment of asList(cohort.teachers ?? cohort.co_teachers)) {
           if (
             assignment.teacher_type_slug !== 'assistant' ||
-            String(assignment.teacher) === String(me.id)
+            String(assignment.teacher) === activeTeacherId
           ) {
             continue;
           }
@@ -1092,6 +1127,7 @@ export class HttpTaskRepository extends ITaskRepository {
             key: `teacher:${assignment.teacher}`,
             kind: 'teacher',
             id: assignment.teacher,
+            branchId: cohort.branch ?? cohort.branch_id ?? selfBranchId,
             name: assignment.teacher_name || `${copy().teacher} #${assignment.teacher}`,
             role: assignment.teacher_type_name || 'Assistant teacher',
             assistant: true,
@@ -1159,12 +1195,18 @@ export class HttpTaskRepository extends ITaskRepository {
 
   async create(draft) {
     const target = draft.target ?? null;
+    const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
+    const membership = asList(me.role_memberships)[0] ?? {};
+    const branchId = target?.branchId ?? me.branch ?? membership.branch ?? null;
     const body = {
       title: draft.title,
       description: draft.description ?? '',
       priority: apiTaskPriority(draft.priority),
       due_at: draft.deadlineAt ?? null,
     };
+    // A scoped staff account cannot create an unbounded task. Always carry its
+    // teaching/work branch when the selected target does not provide one.
+    if (branchId != null) body.branch = Number(branchId);
     if (target?.kind === 'staff' || target?.kind === 'teacher') {
       body.assignee_principal = { kind: target.kind, id: Number(target.id) };
     } else if (target?.kind === 'department') {
@@ -1172,8 +1214,10 @@ export class HttpTaskRepository extends ITaskRepository {
     } else if (target?.kind === 'branch') {
       body.branch = Number(target.id);
     } else {
-      const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
-      body.assignee_principal = { kind: me.principal_kind, id: Number(me.id) };
+      body.assignee_principal = {
+        kind: me.principal_kind,
+        id: Number(me.principal_id ?? me.id),
+      };
     }
     return mapTask(await httpClient.post('tasks/', body));
   }
@@ -1681,14 +1725,90 @@ export class HttpPrintRepository extends IPrintRepository {
     return asList(await httpClient.get('printing/jobs/?page_size=100')).map(mapPrintJob);
   }
 
-  getLibrary() {
-    return Promise.resolve({ fileCount: 0 });
+  async getLibrary() {
+    const printableTypes = new Set([
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ]);
+    const files = asList(await httpClient.get('content/files/?status=clean&page_size=100'))
+      .filter(
+        (file) =>
+          file.is_downloadable !== false &&
+          printableTypes.has(String(file.content_type || '').toLowerCase()),
+      )
+      .map((file) => ({
+        id: String(file.id),
+        filename: file.title || `File #${file.id}`,
+        type: materialKind(file.content_type),
+        size: bytesLabel(file.size_bytes),
+        pages: file.pages ?? null,
+        owner: file.uploaded_by_name || copy().center,
+        updatedAt: formatDate(file.updated_at || file.created_at),
+      }));
+    return { fileCount: files.length, files };
   }
 
-  async createJob() {
-    throw clientContractError(
-      'printing/jobs/',
-      'A print job needs a tenant S3 payload key, branch, source, source ID, and page count. The quick-print form must complete the signed-upload flow first.',
+  async createJob(input) {
+    const printer = Number(input?.printerId);
+    if (!Number.isSafeInteger(printer) || printer < 1) {
+      throw new ApiError(400, 'LOCAL', 'printing/jobs/', {
+        code: 'printer_required',
+        message: 'Choose an available printer.',
+      });
+    }
+
+    let source = 'content';
+    let sourceId = Number(input?.libraryFileId);
+    if (input?.file instanceof File) {
+      const branch = Number(input.branchId);
+      if (!Number.isSafeInteger(branch) || branch < 1) {
+        throw new ApiError(400, 'LOCAL', 'printing/upload-url/', {
+          code: 'print_branch_required',
+          message: 'The selected printer has no available branch.',
+        });
+      }
+      const contentType = input.file.type || 'application/octet-stream';
+      const grant = await httpClient.post('printing/upload-url/', {
+        branch,
+        filename: input.file.name,
+        content_type: contentType,
+        size_bytes: input.file.size,
+      });
+      const uploadBody = new FormData();
+      for (const [name, value] of Object.entries(grant.fields || {})) {
+        uploadBody.append(name, String(value));
+      }
+      uploadBody.append('file', input.file);
+      const uploadResponse = await fetch(grant.url, {
+        method: grant.method || 'POST',
+        body: uploadBody,
+      });
+      if (!uploadResponse.ok) {
+        throw new ApiError(uploadResponse.status, 'POST', 'printing-upload', {
+          code: 'print_upload_failed',
+          message: 'The document could not be uploaded. Please try again.',
+        });
+      }
+      source = 'upload';
+      sourceId = Number(grant.grant_id);
+    }
+    if (!Number.isSafeInteger(sourceId) || sourceId < 1) {
+      throw new ApiError(400, 'LOCAL', 'printing/jobs/', {
+        code: 'print_source_required',
+        message: 'Choose a document before printing.',
+      });
+    }
+    return mapPrintJob(
+      await httpClient.post('printing/jobs/', {
+        source,
+        source_id: sourceId,
+        printer,
+        copies: Math.max(1, Number(input.copies) || 1),
+        color: Boolean(input.color),
+        duplex: Boolean(input.duplex),
+      }),
     );
   }
 
@@ -2041,8 +2161,24 @@ export class HttpMaterialRepository extends IMaterialRepository {
       }));
     }
 
+    // The folder directory can include branch-visible cohort libraries. Upload
+    // authorization is intentionally narrower: a teacher may publish only to
+    // cohorts returned by their exact, principal-scoped cohort register.
+    const activeTeacherId = String(me.principal_id ?? me.id);
+    const visibleCohorts = asList(await httpClient.get('cohorts/?page_size=100'));
+    const taughtCohorts = visibleCohorts.filter(
+      (cohort) =>
+        String(cohort.primary_teacher ?? '') === activeTeacherId ||
+        asList(cohort.teachers ?? cohort.co_teachers).some(
+          (assignment) => String(assignment.teacher) === activeTeacherId,
+        ),
+    );
+    const taughtCohortIds = new Set(taughtCohorts.map((cohort) => String(cohort.id)));
     const cohortFolders = folders.filter(
-      (folder) => folder.library_visibility === 'cohort' && folder.library_cohort,
+      (folder) =>
+        folder.library_visibility === 'cohort' &&
+        folder.library_cohort &&
+        taughtCohortIds.has(String(folder.library_cohort)),
     );
     const byCohort = new Map();
     for (const folder of cohortFolders) {

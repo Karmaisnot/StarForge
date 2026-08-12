@@ -338,6 +338,15 @@
   font-size: 11px;
   font-weight: 700;
 }
+.formError {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sf-danger) 35%, var(--sf-border));
+  border-radius: 10px;
+  color: var(--sf-danger);
+  background: color-mix(in srgb, var(--sf-danger) 8%, var(--sf-surface));
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 /* Calendar view */
 .calHead {

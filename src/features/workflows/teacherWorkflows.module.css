@@ -26,7 +26,7 @@
 .requestCard dd { margin:4px 0 0; color:var(--sf-text); font-size:10px; font-weight:680; }
 .requestCard blockquote { margin:10px 0 0; padding:9px 11px; border-left:3px solid var(--sf-primary); color:var(--sf-muted); background:var(--sf-canvas); font-size:10px; line-height:1.5; }
 .requestCard footer { display:flex; justify-content:flex-end; padding-top:10px; }
-.form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; width:min(760px,80vw); }
+.form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; width:100%; min-width:0; }
 .form label,.form fieldset { display:grid; gap:6px; min-width:0; }
 .form label>span,.form legend { color:var(--sf-muted-2); font-size:10px; font-weight:780; letter-spacing:.055em; text-transform:uppercase; }
 .form input,.form select,.form textarea { width:100%; min-height:41px; padding:9px 11px; border:1px solid var(--sf-border); border-radius:9px; outline:0; color:var(--sf-text); background:var(--sf-canvas); font:inherit; font-size:11px; }

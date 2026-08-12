@@ -50,6 +50,15 @@
   border-color: var(--sf-border-strong);
 }
 
+.outline {
+  background: transparent;
+  color: var(--sf-primary);
+  border-color: color-mix(in srgb, var(--sf-primary) 42%, var(--sf-border));
+}
+.outline:hover {
+  background: var(--sf-primary-soft);
+}
+
 .ink {
   background: var(--sf-ink);
   color: var(--sf-bg);
