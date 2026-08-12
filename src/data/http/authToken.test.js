@@ -23,12 +23,12 @@ describe('password login API contract', () => {
     localStorage.clear();
   });
 
-  it('posts username and password to the bundled API login route', async () => {
+  it('posts username and password to the production API login route', async () => {
     await auth.login({ username: 'nigora.karimova', password: 'demo1234' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, request] = fetchMock.mock.calls[0];
-    expect(url).toBe('/api/auth/login');
+    expect(url).toBe('https://starforge.78.111.91.113.nip.io/api/v1/auth/role-login/');
     expect(request.method).toBe('POST');
     expect(JSON.parse(request.body)).toMatchObject({
       username: 'nigora.karimova',

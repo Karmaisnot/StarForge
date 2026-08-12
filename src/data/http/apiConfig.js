@@ -1,18 +1,22 @@
-// Central API configuration. The bundled Fastify staff API is the working
-// default and is served from the same origin under /api.
+// Central API configuration. Production staff traffic goes directly to the
+// deployed StarForge API; localhost is used only by the explicit dev:local command.
 
-const rawBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 const rawSource = import.meta.env?.VITE_DATA_SOURCE;
+export const PRODUCTION_API_ORIGIN = 'https://starforge.78.111.91.113.nip.io';
 
-// A remote v1 API is an explicit integration choice. Never guess its routes:
-// the bundled staff API remains the safe default for this application.
+// Production is remote by default. Local mode is opt-in and set solely by
+// scripts/dev-local.mjs for an isolated developer stack.
 export const DATA_SOURCE = ['mock', 'local', 'remote'].includes(rawSource)
   ? rawSource
-  : 'local';
+  : 'remote';
 
 export const API_PREFIX = DATA_SOURCE === 'remote' ? '/api/v1' : '/api';
 export const API_MODE = DATA_SOURCE !== 'mock';
 export const LOCAL_API_MODE = DATA_SOURCE === 'local';
+
+const configuredBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim();
+const rawBaseUrl =
+  DATA_SOURCE === 'remote' ? configuredBaseUrl || PRODUCTION_API_ORIGIN : '';
 
 const baseUrl = rawBaseUrl.replace(/\/+$/, '');
 const baseAlreadyVersioned = baseUrl.endsWith(API_PREFIX);

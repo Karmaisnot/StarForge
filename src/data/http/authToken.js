@@ -1,5 +1,5 @@
 // Session handling for staff accounts. Authentication is permanently based on
-// username and password. The bundled API is the default implementation.
+// username and password. Production uses the remote role-login endpoint.
 import { getLocale } from '@/i18n/locale.js';
 import { apiUrl, isLocalApiMode } from './apiConfig.js';
 import { ApiError } from './apiError.js';
@@ -7,7 +7,7 @@ import { ApiError } from './apiError.js';
 const STORAGE_KEY = 'sf-session-access';
 const DEVICE_KEY = 'sf-device-id';
 const AUTH_EVENT = 'sf:auth-changed';
-const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT;
+const AUTH_ENDPOINT = import.meta.env?.VITE_AUTH_ENDPOINT || 'role-login';
 const LOCAL_LOGIN_PATH = 'auth/login';
 const normalizedRemoteEndpoint = AUTH_ENDPOINT?.replace(/^\/+|\/+$/g, '');
 const REMOTE_LOGIN_PATH = normalizedRemoteEndpoint
