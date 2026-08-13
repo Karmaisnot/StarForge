@@ -1091,11 +1091,13 @@ export class HttpTaskRepository extends ITaskRepository {
     const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
     const membership = asList(me.role_memberships)[0] ?? {};
     const selfBranchId = me.branch ?? membership.branch ?? null;
+    const selfDepartmentId = me.department ?? membership.department ?? null;
     const self = {
       key: `${me.principal_kind}:${me.principal_id ?? me.id}`,
       kind: me.principal_kind,
       id: me.principal_id ?? me.id,
       branchId: selfBranchId,
+      departmentId: selfDepartmentId,
       name: displayName(me),
       role: me.role_memberships?.[0]?.account_type_name || copy().me,
       self: true,
@@ -1128,6 +1130,7 @@ export class HttpTaskRepository extends ITaskRepository {
             kind: 'teacher',
             id: assignment.teacher,
             branchId: cohort.branch ?? cohort.branch_id ?? selfBranchId,
+            departmentId: cohort.department ?? cohort.department_id ?? selfDepartmentId,
             name: assignment.teacher_name || `${copy().teacher} #${assignment.teacher}`,
             role: assignment.teacher_type_name || 'Assistant teacher',
             assistant: true,
@@ -1198,6 +1201,9 @@ export class HttpTaskRepository extends ITaskRepository {
     const me = getSessionSnapshot().user ?? (await httpClient.get('users/me/'));
     const membership = asList(me.role_memberships)[0] ?? {};
     const branchId = target?.branchId ?? me.branch ?? membership.branch ?? null;
+    const departmentId =
+      target?.departmentId ??
+      (target == null || target?.self ? me.department ?? membership.department ?? null : null);
     const body = {
       title: draft.title,
       description: draft.description ?? '',
@@ -1207,6 +1213,7 @@ export class HttpTaskRepository extends ITaskRepository {
     // A scoped staff account cannot create an unbounded task. Always carry its
     // teaching/work branch when the selected target does not provide one.
     if (branchId != null) body.branch = Number(branchId);
+    if (departmentId != null) body.department = Number(departmentId);
     if (target?.kind === 'staff' || target?.kind === 'teacher') {
       body.assignee_principal = { kind: target.kind, id: Number(target.id) };
     } else if (target?.kind === 'department') {
@@ -2161,19 +2168,14 @@ export class HttpMaterialRepository extends IMaterialRepository {
       }));
     }
 
-    // The folder directory can include branch-visible cohort libraries. Upload
-    // authorization is intentionally narrower: a teacher may publish only to
-    // cohorts returned by their exact, principal-scoped cohort register.
-    const activeTeacherId = String(me.principal_id ?? me.id);
+    // The cohort collection is already narrowed by the API to the exact active
+    // teacher principal (main/additional/assistant/substitute assignments). Its
+    // compact list presenter is not required to repeat assignment rows, so a
+    // second client-side teacher-id filter incorrectly discarded valid groups.
+    // Treat every returned cohort as an authorized teaching target; the upload
+    // endpoint independently enforces the same row boundary on write.
     const visibleCohorts = asList(await httpClient.get('cohorts/?page_size=100'));
-    const taughtCohorts = visibleCohorts.filter(
-      (cohort) =>
-        String(cohort.primary_teacher ?? '') === activeTeacherId ||
-        asList(cohort.teachers ?? cohort.co_teachers).some(
-          (assignment) => String(assignment.teacher) === activeTeacherId,
-        ),
-    );
-    const taughtCohortIds = new Set(taughtCohorts.map((cohort) => String(cohort.id)));
+    const taughtCohortIds = new Set(visibleCohorts.map((cohort) => String(cohort.id)));
     const cohortFolders = folders.filter(
       (folder) =>
         folder.library_visibility === 'cohort' &&

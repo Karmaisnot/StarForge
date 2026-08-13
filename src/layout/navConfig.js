@@ -168,6 +168,9 @@ export function accessForPath(pathname) {
     '/materials': 'content',
     '/print': 'printing',
     '/people': 'students',
+    // Survey cards retain the short responder URL while the navigation entry
+    // lives at /forms. Treat both paths as the same permission-scoped product.
+    '/surveys': 'forms',
   };
   const normalized = String(pathname ?? '');
   // The router's authenticated index route redirects `/` to `/today` from

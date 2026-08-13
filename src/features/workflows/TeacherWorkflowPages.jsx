@@ -7,6 +7,7 @@ import { useServices } from '@/hooks/useServices.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import { httpClient } from '@/data/http/httpClient.js';
+import { createTeacherRequest } from './teacherRequestApi.js';
 import styles from './teacherWorkflows.module.css';
 
 const REQUEST_TYPES = [
@@ -100,18 +101,7 @@ function RequestModal({ open, cohorts, students, onClose, onCreated }) {
     event.preventDefault();
     setSaving(true);
     try {
-      await httpClient.post('approvals/requests/', {
-        kind: draft.kind,
-        title: draft.title.trim(),
-        description: draft.description.trim(),
-        ...(type.amount && draft.amount ? { amount_uzs: draft.amount } : {}),
-        payload: {
-          ...(draft.cohort ? { cohort_id: Number(draft.cohort), cohort_name: cohorts.find((cohort) => String(cohort.id) === String(draft.cohort))?.name } : {}),
-          ...(draft.student ? { student_id: Number(draft.student), student_name: students.find((student) => String(student.profileId) === String(draft.student))?.name } : {}),
-          ...(draft.from ? { from: draft.from } : {}),
-          ...(draft.to ? { to: draft.to } : {}),
-        },
-      });
+      await createTeacherRequest({ draft, type, cohorts, students });
       toast(t('teacherWorkflows.requestSubmitted'), 'success');
       setDraft({ kind: 'loan', title: '', description: '', amount: '', cohort: '', student: '', from: '', to: '' });
       onCreated();

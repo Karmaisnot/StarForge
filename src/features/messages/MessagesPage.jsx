@@ -8,6 +8,7 @@ import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import { isApiMode } from '@/data/http/apiConfig.js';
+import { mergeTranscript } from './messageMerge.js';
 import styles from './messages.module.css';
 
 const FILTERS = ['all', 'people', 'groups', 'management', 'archived'];
@@ -33,6 +34,7 @@ export function MessagesPage() {
   const [openId, setOpenId] = useState(null);
   const [extraThreads, setExtraThreads] = useState([]);
   const [sentByThread, setSentByThread] = useState({});
+  const [transcriptRevision, setTranscriptRevision] = useState({});
   const [query, setQuery] = useState('');
   const requestedScope = searchParams.get('scope');
   const [filter, setFilter] = useState(() =>
@@ -221,16 +223,28 @@ export function MessagesPage() {
 
         const sendMessage = (message) => {
           if (!active) return;
-          appendMessage(active.id, message);
+          const threadId = active.id;
+          appendMessage(threadId, { ...message, pending: Boolean(active.persisted) });
           if (active.persisted) {
             const request = message.file
-              ? mgmt.sendAttachment(active.id, message.file, message.text || '')
-              : mgmt.sendMessage(active.id, message.text);
+              ? mgmt.sendAttachment(threadId, message.file, message.text || '')
+              : mgmt.sendMessage(threadId, message.text);
             request.then((saved) => {
-              removeMessage(active.id, message.id);
-              appendMessage(active.id, saved);
+              // Keep the confirmed row rendered locally while the canonical
+              // transcript refreshes. Removing first produced an obvious flash
+              // back to the old conversation on slower connections.
+              setSentByThread((current) => ({
+                ...current,
+                [threadId]: (current[threadId] ?? []).map((item) =>
+                  item.id === message.id ? { ...saved, clientId: message.id } : item,
+                ),
+              }));
+              setTranscriptRevision((current) => ({
+                ...current,
+                [threadId]: (current[threadId] ?? 0) + 1,
+              }));
             }).catch(() => {
-              removeMessage(active.id, message.id);
+              removeMessage(threadId, message.id);
               toast(t('common.error'), 'danger');
             });
           }
@@ -303,6 +317,7 @@ export function MessagesPage() {
                   onDelete={() => setDeleteTargetId(active.id)}
                   t={t}
                   locale={locale}
+                  revision={transcriptRevision[active.id] ?? 0}
                   mgmt={mgmt}
                   toast={toast}
                 />
@@ -405,12 +420,13 @@ function Conversation({
   onDelete,
   t,
   locale,
+  revision,
   mgmt,
   toast,
 }) {
   const transcript = useAsync(
     () => (thread.persisted ? mgmt.getTranscript(thread.id) : Promise.resolve([])),
-    [thread.id, locale],
+    [thread.id, locale, revision],
   );
   const [draft, setDraft] = useState('');
   const fileRef = useRef(null);
@@ -426,7 +442,7 @@ function Conversation({
   const [seconds, setSeconds] = useState(0);
 
   const messages = useMemo(
-    () => [...(transcript.data ?? []), ...localMessages],
+    () => mergeTranscript(transcript.data ?? [], localMessages),
     [localMessages, transcript.data],
   );
 

@@ -22,4 +22,14 @@ describe('staff navigation route guard', () => {
     expect(accessForPath('/not-a-staff-page')).toEqual({ denied: true });
     expect(profileCanOpen(accessForPath('/not-a-staff-page'), teacher)).toBe(false);
   });
+
+  it('allows an authorized teacher to open a CEO-created survey responder link', () => {
+    const responder = {
+      ...teacher,
+      permissionCodes: ['forms:read'],
+    };
+
+    expect(accessForPath('/surveys/2')).toMatchObject({ resourceId: 'forms' });
+    expect(profileCanOpen(accessForPath('/surveys/2'), responder)).toBe(true);
+  });
 });
