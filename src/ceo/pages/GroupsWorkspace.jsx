@@ -1,6 +1,7 @@
 import { cloneElement, useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Icons } from '../components/Icons.jsx';
+import { BranchTransferPanel } from '../components/BranchTransferPanel.jsx';
 import { EmptyState, Skeleton } from '../components/feedback.jsx';
 import { SfAvatar } from '../components/primitives.jsx';
 import { ApplicationUnavailableState } from '../components/AvailabilityState.jsx';
@@ -37,6 +38,7 @@ const DETAIL_SECTIONS = Object.freeze([
   { id: 'learning', label: 'Learning', description: 'Assignments and homework', icon: Icons.folder },
   { id: 'exams', label: 'Exams', description: 'Assessment plans', icon: Icons.doc },
   { id: 'finance', label: 'Finance', description: 'Invoices and allocations', icon: Icons.trend },
+  { id: 'transfer', label: 'Move branch', description: 'Relocate this group safely', icon: Icons.globe },
 ]);
 const ATTENDANCE_LABELS = Object.freeze({
   present: 'Present',
@@ -241,6 +243,7 @@ function groupAccess(user) {
     // scope is deliberately hidden here so no tenant-wide branch selector or
     // branch directory request appears in their group workspace.
     organization: !teachingScope && canUseCapability(user, 'org:read'),
+    organizationWrite: !teachingScope && canUseCapability(user, 'org:write'),
     students: canUseCapability(user, 'students:read'),
     studentsWrite: canUseCapability(user, 'students:write'),
     teachers: !teachingScope && canUseCapability(user, 'teachers:read'),
@@ -264,6 +267,7 @@ function availableDetailSections(access) {
     if (item.id === 'learning') return access.assignments;
     if (item.id === 'exams') return access.academics;
     if (item.id === 'finance') return access.finance;
+    if (item.id === 'transfer') return access.organizationWrite;
     return true;
   });
 }
@@ -1576,6 +1580,14 @@ function GroupDetail({ groupId, section, sections, route, onNav, branchId, acces
         {section === 'learning' ? <LearningSection assignmentsState={assignmentsState} /> : null}
         {section === 'exams' ? <ExamsSection examsState={examsState} /> : null}
         {section === 'finance' ? <FinanceSection invoicesState={invoicesState} canViewStudents={access.students} onNav={onNav} /> : null}
+        {section === 'transfer' ? <BranchTransferPanel
+          kind="cohort"
+          subjectId={cohort.id}
+          subjectName={cohort.name}
+          currentBranchId={cohort.branch}
+          currentBranchName={cohort.branch_name}
+          allowDepartment
+        /> : null}
     </div>
   </div>;
 }
