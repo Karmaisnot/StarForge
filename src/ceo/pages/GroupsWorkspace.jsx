@@ -577,6 +577,14 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
     is_archived: filters.archived === 'all' ? undefined : filters.archived === 'archived',
     search: filters.q || undefined,
     ordering: 'name',
+  }, {
+    // A teacher's group ownership can be changed from the CEO workspace in a
+    // neighbouring tab. Reconcile this identity-scoped directory as soon as
+    // the teacher returns so a newly assigned second group is never hidden by
+    // the normal workspace cache window.
+    staleTime: access.teachingScope ? 0 : undefined,
+    refetchOnMount: access.teachingScope ? 'always' : undefined,
+    refetchOnWindowFocus: access.teachingScope,
   });
   const branchesState = useWorkspaceData('/api/v1/org/branches/', { page_size: PAGE_SIZE, ordering: 'name' }, { enabled: !forcedBranch && access.organization });
   const teachersState = useWorkspaceData('/api/v1/teachers/', {

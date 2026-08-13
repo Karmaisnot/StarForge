@@ -100,6 +100,8 @@ export function useWorkspaceData(path, params, options = {}) {
     enabled,
     staleTime: options.staleTime ?? 45_000,
     gcTime: options.gcTime ?? 10 * 60_000,
+    refetchOnMount: options.refetchOnMount,
+    refetchOnWindowFocus: options.refetchOnWindowFocus,
     refetchInterval: options.refreshMs || false,
     refetchIntervalInBackground: false,
     queryFn: ({ signal }) => httpRequest('GET', path, {
