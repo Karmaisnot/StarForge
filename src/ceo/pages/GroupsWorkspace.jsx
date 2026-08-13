@@ -45,6 +45,12 @@ const ATTENDANCE_LABELS = Object.freeze({
   excused: 'Excused',
 });
 const ATTENDANCE_SHORT = Object.freeze({ present: 'P', absent: 'A', late: 'L', excused: 'E' });
+const GROUP_AUDIENCES = Object.freeze([
+  { value: 'kids', label: 'Kids' },
+  { value: 'teens', label: 'Teens' },
+  { value: 'adults', label: 'Adults' },
+  { value: 'custom', label: 'Custom / private' },
+]);
 
 function text(value, fallback = 'Not recorded') {
   const result = String(value ?? '').trim();
@@ -137,6 +143,12 @@ function shiftDate(isoDate, amount) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function audienceLabel(cohort) {
+  if (cohort?.audience_type === 'custom') return text(cohort.custom_audience_name, 'Custom / private');
+  return GROUP_AUDIENCES.find((item) => item.value === cohort?.audience_type)?.label
+    || text(cohort?.audience_type_label || cohort?.audience_display, 'Needs classification');
+}
+
 function calendarMonthRange(offset = 0) {
   const today = todayInOrganization();
   const [year, month] = today.split('-').map(Number);
@@ -212,6 +224,7 @@ function directoryRoute(basePath, filters, page = 1) {
   if (filters.branch && filters.branch !== 'all') params.set('branch', filters.branch);
   if (filters.teacher && filters.teacher !== 'all') params.set('teacher', filters.teacher);
   if (filters.level && filters.level !== 'all') params.set('level', filters.level);
+  if (filters.audience && filters.audience !== 'all') params.set('audience', filters.audience);
   if (filters.archived && filters.archived !== 'active') params.set('archived', filters.archived);
   if (page > 1) params.set('page', String(page));
   return `${basePath}${params.size ? `?${params}` : ''}`;
@@ -363,6 +376,7 @@ function DirectoryFilters({ filters, branches, teachers, levels, complete, branc
     if (!branchId && access.organization) add('branch', form.get('branch'));
     if (access.teachers) add('teacher', form.get('teacher'));
     add('level', form.get('level'));
+    add('audience', form.get('audience'));
     add('archived', form.get('archived'), 'active');
     navigate(onNav, `${basePath}${params.size ? `?${params.toString()}` : ''}`);
   }
@@ -403,13 +417,18 @@ function DirectoryFilters({ filters, branches, teachers, levels, complete, branc
           </select>
         </label>
       ) : null}
+      <label><span>Audience</span><select name="audience" defaultValue={filters.audience}>
+        <option value="all">All audiences</option>
+        {GROUP_AUDIENCES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
+        <option value="unspecified">Needs classification</option>
+      </select></label>
       <label><span>Group state</span><select name="archived" defaultValue={filters.archived}>
         <option value="active">Active</option>
         <option value="all">All</option>
         <option value="archived">Archived</option>
       </select></label>
       <button className="gp3-button is-primary" type="submit"><Icon source={Icons.filter} size={15} /> Apply</button>
-      {(filters.q || (access.organization && filters.branch !== 'all') || (access.teachers && filters.teacher !== 'all') || filters.level !== 'all' || filters.archived !== 'active') ? (
+      {(filters.q || (access.organization && filters.branch !== 'all') || (access.teachers && filters.teacher !== 'all') || filters.level !== 'all' || filters.audience !== 'all' || filters.archived !== 'active') ? (
         <button className="gp3-button" type="button" onClick={() => navigate(onNav, basePath)}>Clear</button>
       ) : null}
     </form>
@@ -429,6 +448,8 @@ function GroupEditor({ id, branchId, access, onNav }) {
     branch: branchId || '',
     department: '',
     level: '',
+    audience_type: '',
+    custom_audience_name: '',
     start_date: todayInOrganization(),
     end_date: shiftDate(todayInOrganization(), 180),
     capacity: '',
@@ -494,6 +515,10 @@ function GroupEditor({ id, branchId, access, onNav }) {
       branch: Number(branchId || source.branch),
       department: source.department ? Number(source.department) : null,
       level: String(source.level || '').trim(),
+      audience_type: String(source.audience_type || '').trim(),
+      custom_audience_name: source.audience_type === 'custom'
+        ? String(source.custom_audience_name || '').trim()
+        : '',
       start_date: source.start_date,
       end_date: source.end_date,
       capacity: source.capacity === '' || source.capacity == null ? null : Number(source.capacity),
@@ -517,6 +542,8 @@ function GroupEditor({ id, branchId, access, onNav }) {
           {!branchId ? <label>Branch<select required value={source.branch || ''} onChange={(event) => changeBranch(event.target.value)}><option value="">Select branch</option>{selectedOption(source.branch, branches.rows, 'branch')}{branches.rows.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label> : <label>Branch<input value={record.data?.branch_name || `Branch ${branchId}`} disabled /></label>}
           <label>Department<select value={source.department || ''} onChange={(event) => change('department', event.target.value)} disabled={!effectiveBranch || departments.pending}><option value="">No department</option>{selectedOption(source.department, departments.rows, 'department')}{departments.rows.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
           <label>Academic level<input maxLength="64" value={source.level || ''} onChange={(event) => change('level', event.target.value)} placeholder="Optional level" /></label>
+          <label>Student audience<select required value={source.audience_type || ''} onChange={(event) => change('audience_type', event.target.value)}><option value="">Choose an audience</option>{GROUP_AUDIENCES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+          {source.audience_type === 'custom' ? <label className="is-wide">Custom or private group type<input required maxLength="80" value={source.custom_audience_name || ''} onChange={(event) => change('custom_audience_name', event.target.value)} placeholder="For example, Executive private class" /></label> : null}
           <label>Capacity<input type="number" inputMode="numeric" min="0" max="32767" value={source.capacity ?? ''} onChange={(event) => change('capacity', event.target.value)} placeholder="Optional" /></label>
         </section>
         <section className="fw-form-section">
@@ -543,7 +570,7 @@ function GroupCard({ cohort, studentCount, occupancyKnown, basePath, access, onN
         <span className="gp3-group-mark" aria-hidden="true"><Icon source={Icons.cohort} size={19} /></span>
         <Status value={cohort.is_archived ? 'archived' : 'active'}>{cohort.is_archived ? 'Archived' : 'Active'}</Status>
       </div>
-      <div><span className="gp3-eyebrow">{access.organization ? text(cohort.branch_name, 'Branch not recorded') : 'Group record'}</span><h3>{text(cohort.name)}</h3><p>{text(cohort.department_name, 'Department not recorded')} · {text(cohort.level, 'Level not recorded')}</p></div>
+      <div><span className="gp3-eyebrow">{access.organization ? text(cohort.branch_name, 'Branch not recorded') : 'Group record'}</span><h3>{text(cohort.name)}</h3><p>{audienceLabel(cohort)} · {text(cohort.department_name, 'Department not recorded')} · {text(cohort.level, 'Level not recorded')}</p></div>
       <dl>
         {access.teachers ? <div><dt>Teacher</dt><dd>{text(cohort.primary_teacher_name || teachers[0]?.teacher_name)}</dd></div> : null}
         <div><dt>Room</dt><dd>{text(cohort.default_room_name)}</dd></div>
@@ -567,6 +594,7 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
     branch: forcedBranch || (access.organization ? routed.params.get('branch') : '') || 'all',
     teacher: access.teachers ? routed.params.get('teacher') || 'all' : 'all',
     level: String(routed.params.get('level') || 'all').slice(0, 80),
+    audience: ['kids', 'teens', 'adults', 'custom', 'unspecified'].includes(routed.params.get('audience')) ? routed.params.get('audience') : 'all',
     archived: ['all', 'archived'].includes(routed.params.get('archived')) ? routed.params.get('archived') : 'active',
   };
   const basePath = groupsBase(forcedBranch);
@@ -574,6 +602,7 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
     page_size: PAGE_SIZE,
     page,
     branch: filters.branch === 'all' ? undefined : filters.branch,
+    audience_type: filters.audience === 'all' ? undefined : filters.audience,
     is_archived: filters.archived === 'all' ? undefined : filters.archived === 'archived',
     search: filters.q || undefined,
     ordering: 'name',
@@ -624,8 +653,9 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
   const visibleRows = useMemo(() => cohortsState.rows.filter((cohort) => {
     if (!complete) return true;
     if (filters.level !== 'all' && String(cohort.level) !== filters.level) return false;
+    if (filters.audience !== 'all' && String(cohort.audience_type) !== filters.audience) return false;
     return cohortHasTeacher(cohort, filters.teacher);
-  }), [cohortsState.rows, complete, filters.level, filters.teacher]);
+  }), [cohortsState.rows, complete, filters.audience, filters.level, filters.teacher]);
   const occupancyKnown = access.students && !studentsState.pending && collectionComplete(studentsState) && !studentsState.error;
   const studentsByGroup = useMemo(() => studentsState.rows.reduce((map, student) => {
     if (student.current_cohort != null) {
@@ -643,6 +673,7 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
       { label: 'Group', value: (row) => safeSpreadsheetValue(row.name) },
       { label: 'Department', value: (row) => safeSpreadsheetValue(row.department_name) },
       { label: 'Level', value: (row) => safeSpreadsheetValue(row.level) },
+      { label: 'Audience', value: (row) => safeSpreadsheetValue(audienceLabel(row)) },
       { label: 'Room', value: (row) => safeSpreadsheetValue(row.default_room_name) },
       { label: 'Capacity', value: (row) => validCount(row.capacity) ?? '' },
       { label: 'Start date', value: (row) => row.start_date },
@@ -704,10 +735,10 @@ function GroupsDirectory({ route, onNav, branchId, access }) {
             <Panel eyebrow="Directory" title="Groups in this view" detail="Open any group to inspect its permitted operating record." className="gp3-directory-panel">
               <div className="gp3-card-grid">{visibleRows.map((cohort) => <GroupCard key={cohort.id} cohort={cohort} studentCount={studentsByGroup.get(String(cohort.id)) || 0} occupancyKnown={occupancyKnown} basePath={basePath} access={access} onNav={onNav} />)}</div>
               <div className="gp3-table-wrap gp3-desktop-table" role="region" aria-label="Group directory, scrollable table" tabIndex="0"><table className="gp3-table" aria-label="Group directory">
-                <thead><tr><th>Group</th>{access.organization ? <th>Branch</th> : null}<th>Level</th>{access.teachers ? <th>Teachers</th> : null}<th>Room</th>{access.students ? <th>Students</th> : null}<th>Capacity</th><th>Dates</th><th>State</th><th><span className="gp3-sr-only">Open</span></th></tr></thead>
+                <thead><tr><th>Group</th>{access.organization ? <th>Branch</th> : null}<th>Audience</th><th>Level</th>{access.teachers ? <th>Teachers</th> : null}<th>Room</th>{access.students ? <th>Students</th> : null}<th>Capacity</th><th>Dates</th><th>State</th><th><span className="gp3-sr-only">Open</span></th></tr></thead>
                 <tbody>{visibleRows.map((cohort) => <tr key={cohort.id}>
                   <td><RouteLink to={`${basePath}/${cohort.id}/overview`} onNav={onNav}><strong>{text(cohort.name)}</strong><small>{text(cohort.department_name)}</small></RouteLink></td>
-                  {access.organization ? <td>{text(cohort.branch_name)}</td> : null}<td>{text(cohort.level, '—')}</td>
+                  {access.organization ? <td>{text(cohort.branch_name)}</td> : null}<td>{audienceLabel(cohort)}</td><td>{text(cohort.level, '—')}</td>
                   {access.teachers ? <td>{text(assignmentRows(cohort).map((item) => item.teacher_name).filter(Boolean).join(', '))}</td> : null}
                   <td>{text(cohort.default_room_name, '—')}</td>{access.students ? <td>{occupancyKnown ? formatBusinessNumber(studentsByGroup.get(String(cohort.id)) || 0) : '—'}<small>{occupancyKnown && validCount(cohort.capacity) > 0 ? `${percent((studentsByGroup.get(String(cohort.id)) || 0) / validCount(cohort.capacity) * 100)} occupied` : 'Exact coverage and a positive capacity are required'}</small></td> : null}
                   <td>{validCount(cohort.capacity) == null ? '—' : formatBusinessNumber(cohort.capacity)}</td><td>{dateOnly(cohort.start_date)}<small>to {dateOnly(cohort.end_date)}</small></td>
@@ -788,7 +819,7 @@ function GroupHero({ cohort, basePath, access, onNav }) {
           <span className="gp3-group-mark" aria-hidden="true"><Icon source={Icons.cohort} size={21} /></span>
           <div><span className="gp3-eyebrow">Group workspace</span><h1>{text(cohort.name)}</h1><p>
             {access.organization ? <><RouteLink to={`branches/${cohort.branch}`} onNav={onNav}>{text(cohort.branch_name)}</RouteLink><span>·</span></> : null}
-            {text(cohort.department_name)}<span>·</span>{text(cohort.level, 'Level not recorded')}<span>·</span>Study month {formatBusinessNumber(cohort.study_month || 1)}
+            {audienceLabel(cohort)}<span>·</span>{text(cohort.department_name)}<span>·</span>{text(cohort.level, 'Level not recorded')}<span>·</span>Study month {formatBusinessNumber(cohort.study_month || 1)}
           </p></div>
         </div>
         <div className="gp3-hero-meta"><Status value={cohort.is_archived ? 'archived' : 'active'}>{cohort.is_archived ? 'Archived' : 'Active'}</Status><span>{dateOnly(cohort.start_date)} – {dateOnly(cohort.end_date)}</span>{access.cohortsWrite && !cohort.is_archived ? <RouteLink className="gp3-button" to={`${basePath}/${cohort.id}/edit`} onNav={onNav}><Icon source={Icons.settings} size={14} /> Edit group</RouteLink> : null}{access.cohortsWrite && cohort.is_archived ? <RestoreGroupButton cohortId={cohort.id} /> : null}</div>
@@ -1022,6 +1053,7 @@ function OverviewSection({ cohort, membersState, teachersState, dashboardState, 
         <Panel eyebrow="Group record" title="Operating details" detail="Core information for this teaching group.">
           <div className="gp3-facts">
             {access.organization ? <DetailValue label="Branch"><RouteLink to={`branches/${cohort.branch}`} onNav={onNav}>{text(cohort.branch_name)}</RouteLink></DetailValue> : null}
+            <DetailValue label="Audience" value={audienceLabel(cohort)} />
             <DetailValue label="Department" value={text(cohort.department_name)} />
             <DetailValue label="Level" value={text(cohort.level)} />
             <DetailValue label="Default room" value={text(cohort.default_room_name)} />
