@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/layout/PageHeader.jsx';
 import { AsyncBoundary } from '@/layout/PageState.jsx';
-import { Button, Chip, Icon, ProgressBar, StarMark } from '@/ui';
+import { Button, Chip, Icon, ProgressBar } from '@/ui';
 import { useServices } from '@/hooks/useServices.js';
 import { useAsync } from '@/hooks/useAsync.js';
 import { useToast } from '@/hooks/useToast.js';
 import { useT } from '@/hooks/useT.js';
 import styles from './surveys.module.css';
+import { answerPresent } from './surveyAnswers.js';
 
 export function SurveysPage() {
   const { surveyId } = useParams();
@@ -43,9 +44,6 @@ export function SurveyDirectory() {
 
           <section className={styles.hero}>
             <div>
-              <span className={styles.eyebrow}>
-                <StarMark size={15} color="var(--sf-primary)" /> {t('surveys.privateSpace')}
-              </span>
               <h2>{t('surveys.heroTitle')}</h2>
               <p>{t('surveys.heroBody')}</p>
             </div>
@@ -116,7 +114,6 @@ export function SurveyDirectory() {
           <section className={styles.history}>
             <header>
               <div>
-                <span>{t('surveys.archive')}</span>
                 <h2>{t('surveys.historyTitle')}</h2>
               </div>
               <strong className="sf-mono">{history.length}</strong>
@@ -246,7 +243,6 @@ function SurveyRunnerView({ survey, service, t }) {
 
       <section className={styles.runnerHero}>
         <div>
-          <span>{t('surveys.fullPage')}</span>
           <h1>{survey.title}</h1>
           <p>{t('surveys.runnerIntro')}</p>
         </div>
@@ -359,7 +355,7 @@ function SurveyRunnerView({ survey, service, t }) {
   );
 }
 
-function QuestionField({ question, value, onChange, t }) {
+export function QuestionField({ question, value, onChange, t }) {
   if (question.kind === 'rating') {
     return (
       <div className={styles.ratingField}>
@@ -381,15 +377,15 @@ function QuestionField({ question, value, onChange, t }) {
     const options =
       question.kind === 'boolean'
         ? [
-            { value: 'yes', label: t('surveys.yes') },
-            { value: 'no', label: t('surveys.no') },
+            { value: true, label: t('surveys.yes') },
+            { value: false, label: t('surveys.no') },
           ]
         : (question.options ?? []);
     return (
       <div className={styles.choiceField}>
         {options.map((option) => (
           <button
-            key={option.value}
+            key={String(option.value)}
             type="button"
             data-on={value === option.value ? '1' : '0'}
             onClick={() => onChange(option.value)}
@@ -462,12 +458,6 @@ function SurveyNotFound({ t }) {
 function firstIncomplete(questions, answers) {
   const index = questions.findIndex((question) => !answerPresent(answers[question.id]));
   return index < 0 ? 0 : index;
-}
-
-function answerPresent(value) {
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'string') return value.trim().length > 0;
-  return value !== undefined && value !== null;
 }
 
 function truncate(value, max) {
