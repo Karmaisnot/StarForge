@@ -6,31 +6,50 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
   width: min(420px, calc(100vw - 40px));
   pointer-events: none;
 }
 .toast {
+  --toast-tone: var(--sf-primary);
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-width: min(280px, 100%);
   max-width: 100%;
-  background: var(--sf-ink);
-  color: var(--sf-bg);
-  padding: 10px 18px;
-  border-radius: 999px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--toast-tone) 22%, var(--sf-border));
+  border-radius: 15px;
+  background: var(--sf-surface);
+  color: var(--sf-ink);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
   box-shadow: var(--sf-shadow-lg);
-  animation: slideIn 0.22s ease-out;
+  animation: slideIn 280ms cubic-bezier(.22, 1, .36, 1);
 }
 .success {
-  background: var(--sf-success);
-  color: #fffcf5;
+  --toast-tone: var(--sf-success);
 }
 .danger,
 .error {
-  background: var(--sf-danger);
-  color: #fffcf5;
+  --toast-tone: var(--sf-danger);
+}
+.icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--toast-tone) 13%, var(--sf-surface));
+  color: var(--toast-tone);
+}
+.message {
+  min-width: 0;
+  text-wrap: pretty;
 }
 @keyframes slideIn {
   from {

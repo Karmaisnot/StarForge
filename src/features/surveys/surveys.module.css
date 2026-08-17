@@ -35,6 +35,7 @@
   color: var(--sf-ink-2);
   font-size: 14px;
   line-height: 1.65;
+  text-wrap: pretty;
 }
 .heroCount {
   display: flex;
@@ -51,7 +52,7 @@
 }
 .heroCount > span {
   color: var(--sf-muted);
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .heroCount > small {
   display: flex;
@@ -61,7 +62,7 @@
   padding-top: 13px;
   border-top: 1px solid var(--sf-border);
   color: var(--sf-primary);
-  font-size: 9px;
+  font-size: 11px;
 }
 .activeGrid {
   display: grid;
@@ -92,7 +93,7 @@
 }
 .surveyCard > header > span {
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .surveyCard h2 {
   max-width: 620px;
@@ -105,7 +106,9 @@
 .surveyCard > p {
   margin: 0;
   color: var(--sf-muted);
-  font-size: 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-wrap: pretty;
 }
 .cardProgress {
   margin-top: 22px;
@@ -117,7 +120,7 @@
 .cardProgress > div {
   margin-bottom: 9px;
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .cardProgress strong {
   color: var(--sf-ink);
@@ -131,7 +134,7 @@
   align-items: center;
   gap: 6px;
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .surveyCard > footer > div {
   display: flex;
@@ -161,7 +164,7 @@
 }
 .emptyActive span {
   color: var(--sf-muted);
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .history {
   margin-top: 28px;
@@ -242,7 +245,7 @@
 .history article time,
 .history article > span:nth-child(3) {
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .emptyHistory {
   margin: 0;
@@ -272,8 +275,9 @@
   max-width: 680px;
   margin: 0;
   color: var(--sf-ink-2);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
+  text-wrap: pretty;
 }
 .runnerProgress {
   padding: 19px 20px;
@@ -288,7 +292,7 @@
 }
 .runnerProgress > span {
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .runnerProgress > strong {
   margin: 7px 0 10px;
@@ -298,7 +302,7 @@
 .runnerProgress > small {
   margin-top: 10px;
   color: var(--sf-muted);
-  font: 8px/1 var(--sf-font-mono);
+  font: 11px/1.25 var(--sf-font-mono);
 }
 .runnerProgress > small[data-state='error'] {
   color: var(--sf-danger);
@@ -330,7 +334,7 @@
 .questionNav header span,
 .runnerSummary > span {
   color: var(--sf-primary);
-  font: 750 8px/1 var(--sf-font-mono);
+  font: 750 11px/1 var(--sf-font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -374,7 +378,7 @@
   place-items: center;
   border-radius: 8px;
   background: var(--sf-surface-2);
-  font: 750 9px/1 var(--sf-font-mono);
+  font: 750 11px/1 var(--sf-font-mono);
 }
 .questionNav button[data-done='1'] > span {
   color: var(--sf-success);
@@ -382,8 +386,8 @@
 }
 .questionNav button small {
   overflow: hidden;
-  font-size: 9px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .questionNav button i {
   width: 5px;
@@ -399,8 +403,8 @@
   border-top: 1px solid var(--sf-border);
   color: var(--sf-muted);
   background: var(--sf-surface-2);
-  font-size: 8px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.5;
 }
 .questionStage {
   min-height: 590px;
@@ -414,13 +418,13 @@
 }
 .questionNumber span {
   color: var(--sf-primary);
-  font: 750 9px/1 var(--sf-font-mono);
+  font: 750 11px/1 var(--sf-font-mono);
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 .questionNumber small {
   color: var(--sf-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .questionStage > h2 {
   max-width: 760px;
@@ -435,8 +439,9 @@
   max-width: 680px;
   margin: 0 0 25px;
   color: var(--sf-muted);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.6;
+  text-wrap: pretty;
 }
 .ratingField {
   display: grid;
@@ -481,7 +486,7 @@
 }
 .ratingField span {
   color: var(--sf-muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .choiceField {
   display: grid;
@@ -508,7 +513,7 @@
   background: var(--sf-surface);
 }
 .choiceField strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 .textField {
   position: relative;
@@ -536,7 +541,7 @@
   right: 13px;
   bottom: 11px;
   color: var(--sf-muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .runnerActions {
   display: grid;
@@ -555,7 +560,7 @@
 }
 .runnerActions > span {
   color: var(--sf-muted);
-  font: 9px/1 var(--sf-font-mono);
+  font: 11px/1 var(--sf-font-mono);
 }
 .runnerSummary {
   padding: 19px;
@@ -576,10 +581,10 @@
 }
 .runnerSummary small {
   color: var(--sf-muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .runnerSummary b {
-  font-size: 9px;
+  font-size: 11px;
   text-align: right;
 }
 .runnerSummary > button {

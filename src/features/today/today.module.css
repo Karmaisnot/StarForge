@@ -1037,7 +1037,7 @@
 
 .taskRow {
   display: grid;
-  grid-template-columns: 3px 18px minmax(0, 1fr) auto auto;
+  grid-template-columns: 3px 30px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 11px 18px;
@@ -1053,8 +1053,8 @@
 }
 .taskCheck {
   display: grid;
-  width: 17px;
-  height: 17px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   place-items: center;
   border: 1.5px solid var(--sf-border-strong);
@@ -1520,6 +1520,62 @@
   font-size: 10px;
 }
 
+/* Keep operational metadata legible on real laptop and phone displays. */
+:is(
+  .surveyEyebrow,
+  .lessonTopline,
+  .panelEyebrow,
+  .sectionHeading > div > span,
+  .metricUp,
+  .metricDown,
+  .lineChart text,
+  .axisLabel
+) {
+  font-size: 10px;
+}
+
+:is(
+  .scoreRing span,
+  .rankSignals span,
+  .sectionHeading small,
+  .chartCurrent span,
+  .loadColumn > span,
+  .loadColumn small,
+  .groupIdentity span,
+  .groupAttendance strong,
+  .groupCards,
+  .groupCycle span,
+  .scheduleLabel small,
+  .taskMeta > span,
+  .taskRow > span:nth-last-child(-n + 2),
+  .aiHeader > span,
+  .activityRow p,
+  .activityRow time,
+  .managementCopy small,
+  .managementCard time,
+  .spotlightHead > span:nth-child(2) small,
+  .printCopy strong,
+  .aiActionCopy small,
+  .confidence
+) {
+  font-size: 11px;
+}
+
+:is(.scoreRow > small, .aiMini, .spotlightStats small, .docThumb i, .printCopy small, .printCopy em) {
+  font-size: 9px;
+}
+
+@media (max-width: 767px) {
+  .taskCheck {
+    width: 44px;
+    height: 44px;
+  }
+
+  .taskRow {
+    grid-template-columns: 3px 44px minmax(0, 1fr) auto auto;
+  }
+}
+
 /* Widget controls */
 .widgetList {
   display: flex;
@@ -1658,7 +1714,7 @@
     justify-self: start;
   }
   .taskRow {
-    grid-template-columns: 3px 18px minmax(0, 1fr) auto;
+    grid-template-columns: 3px 44px minmax(0, 1fr) auto;
   }
   .taskRow > span:last-child {
     display: none;

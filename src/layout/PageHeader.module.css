@@ -7,7 +7,7 @@
   padding: 24px 26px;
   border: 1px solid var(--sf-v2-border, var(--sf-border));
   border-radius: 20px;
-  background: linear-gradient(145deg, var(--sf-surface), color-mix(in srgb, var(--sf-surface-2) 45%, var(--sf-surface)));
+  background: var(--sf-surface);
   box-shadow: var(--sf-v2-shadow, 0 12px 28px color-mix(in srgb, var(--sf-ink) 6%, transparent));
 }
 .eyebrow {
@@ -23,15 +23,17 @@
   margin: 0;
   font-size: clamp(27px, 3vw, 40px);
   font-weight: 760;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 1.04;
+  text-wrap: balance;
 }
 .sub {
   max-width: 750px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--sf-muted);
+  text-wrap: pretty;
 }
 .right {
   display: flex;
