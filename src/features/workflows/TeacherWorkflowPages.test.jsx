@@ -36,4 +36,30 @@ describe('createTeacherRequest', () => {
     });
     expect(httpClient.post.mock.calls[0][1]).not.toHaveProperty('borrower_id');
   });
+
+  it('preserves an arbitrary valid two-decimal amount for approval requests', async () => {
+    await createTeacherRequest({
+      draft: {
+        kind: 'procurement',
+        title: 'Replacement cable',
+        description: 'Purchase one classroom display cable.',
+        amount: '232001.37',
+        cohort: '',
+        student: '',
+        from: '',
+        to: '',
+      },
+      type: { amount: true },
+      cohorts: [],
+      students: [],
+    });
+
+    expect(httpClient.post).toHaveBeenCalledWith('approvals/requests/', {
+      kind: 'procurement',
+      title: 'Replacement cable',
+      description: 'Purchase one classroom display cable.',
+      amount_uzs: '232001.37',
+      payload: {},
+    });
+  });
 });

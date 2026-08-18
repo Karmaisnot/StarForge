@@ -34,6 +34,10 @@
 .form input:focus,.form select:focus,.form textarea:focus { border-color:color-mix(in srgb,var(--sf-primary) 58%,var(--sf-border)); box-shadow:0 0 0 3px color-mix(in srgb,var(--sf-primary) 9%,transparent); }
 .full { grid-column:1/-1; }
 .form footer { display:flex; justify-content:flex-end; gap:8px; padding-top:12px; border-top:1px solid var(--sf-border); }
+.formError { display:flex; align-items:flex-start; gap:9px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--sf-danger) 34%,var(--sf-border)); border-radius:10px; background:color-mix(in srgb,var(--sf-danger) 7%,var(--sf-surface)); color:var(--sf-danger); }
+.formError>span { display:grid; gap:2px; }
+.formError strong { font-size:10px; }
+.formError small { color:var(--sf-muted); font-size:10px; line-height:1.45; }
 .typePicker { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
 .typePicker button { display:flex; align-items:center; gap:7px; min-height:45px; padding:7px 9px; border:1px solid var(--sf-border); border-radius:9px; color:var(--sf-muted); background:var(--sf-canvas); font:inherit; font-size:10px; text-align:left; cursor:pointer; }
 .typePicker button[data-active='true'] { border-color:color-mix(in srgb,var(--sf-primary) 60%,var(--sf-border)); color:var(--sf-primary); background:color-mix(in srgb,var(--sf-primary) 8%,var(--sf-surface)); }

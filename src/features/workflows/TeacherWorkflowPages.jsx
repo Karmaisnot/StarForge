@@ -95,26 +95,39 @@ function RequestModal({ open, cohorts, students, onClose, onCreated }) {
   const toast = useToast();
   const [draft, setDraft] = useState({ kind: 'loan', title: '', description: '', amount: '', cohort: '', student: '', from: '', to: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (open) setError('');
+  }, [open]);
   const type = REQUEST_TYPES.find((item) => item.id === draft.kind) || REQUEST_TYPES[0];
   const scopedStudents = draft.cohort ? students.filter((student) => groupIdOf(student) === String(draft.cohort)) : students;
   const submit = async (event) => {
     event.preventDefault();
+    setError('');
     setSaving(true);
     try {
       await createTeacherRequest({ draft, type, cohorts, students });
       toast(t('teacherWorkflows.requestSubmitted'), 'success');
       setDraft({ kind: 'loan', title: '', description: '', amount: '', cohort: '', student: '', from: '', to: '' });
       onCreated();
-    } catch { toast(t('common.error'), 'danger'); } finally { setSaving(false); }
+    } catch (failure) {
+      const fieldMessage = failure?.fields && typeof failure.fields === 'object'
+        ? Object.values(failure.fields).flat().find(Boolean)
+        : '';
+      const message = String(fieldMessage || failure?.message || t('common.error'));
+      setError(message);
+      toast(message, 'danger');
+    } finally { setSaving(false); }
   };
   return <Modal open={open} onClose={onClose} title={t('teacherWorkflows.newRequest')}><form className={styles.form} onSubmit={submit}>
     <label className={styles.full}><span>{t('teacherWorkflows.requestType')}</span><div className={styles.typePicker}>{REQUEST_TYPES.map((item) => <button type="button" data-active={draft.kind === item.id} onClick={() => setDraft({ ...draft, kind: item.id, cohort: '', student: '' })} key={item.id}><i>{item.icon}</i><span>{t(`teacherWorkflows.kind_${item.id}`)}</span></button>)}</div></label>
     <label className={styles.full}><span>{t('teacherWorkflows.title')}</span><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={t('teacherWorkflows.titlePlaceholder')} /></label>
-    {type.amount && <label><span>{t('teacherWorkflows.amountUzs')}</span><input required type="number" min="1" step="1000" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} /></label>}
+    {type.amount && <label><span>{t('teacherWorkflows.amountUzs')}</span><input required type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.amount} onChange={(event) => { setError(''); setDraft({ ...draft, amount: event.target.value }); }} /></label>}
     {type.group && <label><span>{t('teacherWorkflows.group')}</span><select required value={draft.cohort} onChange={(event) => setDraft({ ...draft, cohort: event.target.value, student: '' })}><option value="">{t('teacherWorkflows.chooseGroup')}</option>{cohorts.map((cohort) => <option value={cohort.id} key={cohort.id}>{cohort.name}</option>)}</select></label>}
     {type.student && <label><span>{t('teacherWorkflows.student')}</span><select required value={draft.student} onChange={(event) => setDraft({ ...draft, student: event.target.value })}><option value="">{t('teacherWorkflows.chooseStudent')}</option>{scopedStudents.map((student) => <option value={student.profileId} key={student.key}>{student.name}</option>)}</select></label>}
     {type.dates && <><label><span>{t('teacherWorkflows.from')}</span><input required type="date" value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} /></label><label><span>{t('teacherWorkflows.to')}</span><input required type="date" min={draft.from} value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /></label></>}
     <label className={styles.full}><span>{t('teacherWorkflows.description')}</span><textarea required rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder={t('teacherWorkflows.descriptionPlaceholder')} /></label>
+    {error && <div className={`${styles.formError} ${styles.full}`} role="alert"><Icon name="flag" size={15} /><span><strong>{t('common.error')}</strong><small>{error}</small></span></div>}
     <footer className={styles.full}><Button type="button" variant="ghost" onClick={onClose}>{t('common.cancel')}</Button><Button type="submit" variant="primary" icon="send" disabled={saving}>{saving ? t('common.loading') : t('teacherWorkflows.submitRequest')}</Button></footer>
   </form></Modal>;
 }
