@@ -63,6 +63,7 @@ const compact = (items) => items.filter(Boolean);
 // readable.
 const TEACHER_PRIMARY_IDS = new Set([
   'today',
+  'work',
   'tasks',
   'cohorts',
   'students',
@@ -99,6 +100,7 @@ export function isTeacherWorkspace(profile) {
 
 const REMOTE_PRIMARY_NAV = [
   { id: 'today', path: '/today', label: 'Today', icon: 'home', access: 'staff' },
+  { id: 'work', path: '/work', label: 'Schedule & requests', icon: 'cal', access: 'staff' },
   ...compact([
     remoteResource('tasks'),
     remoteResource('cohorts'),
@@ -191,7 +193,7 @@ export function accessForPath(pathname) {
       resourceId: resource.id,
     };
   }
-  if (String(pathname).startsWith('/today') || String(pathname).startsWith('/settings') || String(pathname).startsWith('/account')) {
+  if (String(pathname).startsWith('/today') || String(pathname).startsWith('/work') || String(pathname).startsWith('/settings') || String(pathname).startsWith('/account')) {
     return { access: 'staff' };
   }
   const nav = navItemForPath(pathname);

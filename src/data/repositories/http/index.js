@@ -620,10 +620,15 @@ function mapFormQuestion(field, index) {
             : rawKind.includes('textarea') || rawKind.includes('long')
               ? 'longText'
               : 'text';
-  const options = asList(field.options ?? field.choices).map((option, optionIndex) => ({
-    value: String(option?.value ?? option?.id ?? optionIndex),
-    label: option?.label ?? option?.name ?? option?.title ?? String(option),
-  }));
+  const options = asList(field.options ?? field.choices).map((option, optionIndex) => {
+    if (typeof option === 'string' || typeof option === 'number' || typeof option === 'boolean') {
+      return { value: String(option), label: String(option) };
+    }
+    return {
+      value: String(option?.value ?? option?.id ?? option?.label ?? optionIndex),
+      label: option?.label ?? option?.name ?? option?.title ?? String(option?.value ?? optionIndex),
+    };
+  });
   return {
     id: String(field.id ?? `field-${index}`),
     kind,

@@ -32,4 +32,9 @@ describe('staff navigation route guard', () => {
     expect(accessForPath('/surveys/2')).toMatchObject({ resourceId: 'forms' });
     expect(profileCanOpen(accessForPath('/surveys/2'), responder)).toBe(true);
   });
+
+  it('keeps the staff schedule, meeting, and absence workspace reachable', () => {
+    expect(accessForPath('/work')).toEqual({ access: 'staff' });
+    expect(profileCanOpen(accessForPath('/work'), teacher)).toBe(true);
+  });
 });

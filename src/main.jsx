@@ -6,11 +6,20 @@ import '@/styles/base.css';
 import '@/ceo/styles/foundation-v2.css';
 import { AppProviders } from '@/app/providers/AppProviders.jsx';
 import { App } from '@/app/App.jsx';
+import { isolatedDevelopmentUrl } from '@/lib/devOrigin.js';
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <AppProviders>
-      <App />
-    </AppProviders>
-  </StrictMode>,
-);
+const isolatedUrl = import.meta.env.DEV
+  ? isolatedDevelopmentUrl(window.location, import.meta.env.VITE_DEV_APP_HOST || 'staff.localhost')
+  : '';
+
+if (isolatedUrl) {
+  window.location.replace(isolatedUrl);
+} else {
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <AppProviders>
+        <App />
+      </AppProviders>
+    </StrictMode>,
+  );
+}

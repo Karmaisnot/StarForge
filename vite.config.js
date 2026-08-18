@@ -67,7 +67,7 @@ function proxyConfig(target) {
   };
 }
 
-const TUNNEL_ALLOWED_HOSTS = ['.ngrok-free.app'];
+const TUNNEL_ALLOWED_HOSTS = ['.ngrok-free.app', 'staff.localhost'];
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');

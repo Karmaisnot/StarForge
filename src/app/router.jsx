@@ -104,7 +104,7 @@ export const router = createBrowserRouter([
                 { path: 'materials', element: <Navigate to="/content" replace /> },
                 { path: 'print', element: <Navigate to="/printing" replace /> },
                 { path: 'people/*', element: <Navigate to="/students" replace /> },
-                { path: 'work', element: <Navigate to="/tasks" replace /> },
+                { path: 'work', element: page(<WorkPage />) },
                 { path: 'surveys', element: <Navigate to="/forms" replace /> },
                 { path: 'surveys/:surveyId', element: page(<SurveysPage />) },
                 { path: 'mgmt', element: <Navigate to="/messages?scope=management" replace /> },

@@ -32,4 +32,26 @@ describe('HTTP survey response serialization', () => {
       ],
     });
   });
+
+  it('submits the actual option text instead of its visual position', async () => {
+    httpClient.get.mockResolvedValue({
+      id: 42,
+      title: 'Availability',
+      form_fields: [
+        { id: 17, label: 'Days', field_type: 'multi_choice', options: ['Monday', 'Tuesday'] },
+      ],
+    });
+    const repository = new HttpSurveyRepository();
+    const form = await repository.getDetail(42);
+
+    expect(form.questions[0].options).toEqual([
+      { value: 'Monday', label: 'Monday' },
+      { value: 'Tuesday', label: 'Tuesday' },
+    ]);
+
+    await repository.submit(42, { answers: { 17: ['Tuesday'] } });
+    expect(httpClient.post).toHaveBeenLastCalledWith('forms/42/submit/', {
+      answers: [{ field: 17, value: ['Tuesday'] }],
+    });
+  });
 });
