@@ -2454,7 +2454,7 @@ export class HttpWorkRepository extends IWorkRepository {
     const [schedule, meetings, requests, loans, covers, pool, contacts, branches, departments, staff, teachers] = await Promise.all([
       capability(() =>
         httpClient.get(
-          `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200`,
+          `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=100`,
         ),
       ),
       capability(() => httpClient.get('meetings/upcoming/?page_size=100')),
@@ -2851,12 +2851,12 @@ export class HttpAcademicRepository extends IAcademicRepository {
     ] = await Promise.all([
       capability(() =>
         httpClient.get(
-          `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200`,
+          `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=100`,
         ),
       ),
       capability(() =>
         httpClient.get(
-          `attendance/records/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200&ordering=-marked_at`,
+          `attendance/records/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=100&ordering=-marked_at`,
         ),
       ),
       capability(() => httpClient.get('assignments/?page_size=100&ordering=-due_at')),

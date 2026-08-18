@@ -11,10 +11,11 @@ vi.mock('@/data/http/httpClient.js', () => ({
 }));
 
 import { httpClient } from '@/data/http/httpClient.js';
-import { HttpSurveyRepository } from './index.js';
+import { HttpSurveyRepository, HttpWorkRepository } from './index.js';
 
 describe('HTTP survey response serialization', () => {
   beforeEach(() => {
+    httpClient.get.mockReset();
     httpClient.post.mockReset().mockResolvedValue({ id: 91 });
   });
 
@@ -53,5 +54,26 @@ describe('HTTP survey response serialization', () => {
     expect(httpClient.post).toHaveBeenLastCalledWith('forms/42/submit/', {
       answers: [{ field: 17, value: ['Tuesday'] }],
     });
+  });
+});
+
+describe('HTTP work workspace pagination', () => {
+  beforeEach(() => {
+    httpClient.get.mockReset().mockImplementation((path) => {
+      if (path === 'users/me/') {
+        return Promise.resolve({ id: 7, account_kind: 'staff', role: 'assistant' });
+      }
+      return Promise.resolve({ count: 0, results: [] });
+    });
+  });
+
+  it('never asks the production API for more than its 100-record limit', async () => {
+    await new HttpWorkRepository().getWorkspace();
+
+    const requestedPaths = httpClient.get.mock.calls.map(([path]) => path);
+    expect(requestedPaths.some((path) => path.includes('schedule/lessons/') && path.includes('page_size=100'))).toBe(true);
+    expect(requestedPaths).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/page_size=(?:10[1-9]|1[1-9]\d|[2-9]\d{2,})/)]),
+    );
   });
 });
