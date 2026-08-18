@@ -194,7 +194,8 @@
   display: flex;
   justify-content: flex-end;
   background: rgb(17 14 10 / 45%);
-  backdrop-filter: blur(3px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .libraryDrawer {
   display: flex;

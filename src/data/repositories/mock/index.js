@@ -760,6 +760,18 @@ export class MockWorkRepository extends IWorkRepository {
   #workspace = buildWorkFixture();
 
   getWorkspace() {
+    this.#workspace.capabilities.scheduleMeetings = true;
+    this.#workspace.meetingAudienceComplete = true;
+    this.#workspace.meetingAudience = {
+      branches: [{ id: '1', name: 'Central Campus' }, { id: '2', name: 'Riverside Campus' }],
+      departments: [{ id: '10', name: 'Academic team' }, { id: '11', name: 'Operations' }],
+      people: [
+        { key: 'staff:1', kind: 'staff', id: 1, name: 'Rano Karimova', role: 'Director', branchIds: ['1'], departmentIds: ['11'] },
+        { key: 'staff:2', kind: 'staff', id: 2, name: 'Kamola Rakhimova', role: 'Administrator', branchIds: ['1'], departmentIds: ['11'] },
+        { key: 'teacher:3', kind: 'teacher', id: 3, name: 'Aziza Yuldasheva', role: 'Teacher', branchIds: ['1'], departmentIds: ['10'] },
+        { key: 'teacher:4', kind: 'teacher', id: 4, name: 'Muhammad Ergashev', role: 'Teacher', branchIds: ['2'], departmentIds: ['10'] },
+      ],
+    };
     return respond(this.#workspace);
   }
   createRequest(input) {
@@ -771,6 +783,7 @@ export class MockWorkRepository extends IWorkRepository {
       amount: input.amount ?? null,
       outstanding: input.kind === 'loan' ? (input.amount ?? null) : null,
       status: 'pending',
+      payload: input.payload ?? {},
       createdAt: new Date().toISOString(),
     };
     this.#workspace.requests.unshift(request);
@@ -788,6 +801,20 @@ export class MockWorkRepository extends IWorkRepository {
       (candidate) => String(candidate.id) === String(id),
     );
     if (meeting) meeting.response = response;
+    return respond(meeting);
+  }
+  scheduleMeeting(input) {
+    const meeting = {
+      id: `meeting-${Date.now()}`,
+      title: input.title,
+      agenda: input.agenda || '',
+      location: input.location || '',
+      startsAt: input.starts_at,
+      endsAt: input.ends_at,
+      status: 'scheduled',
+      response: 'accepted',
+    };
+    this.#workspace.meetings.unshift(meeting);
     return respond(meeting);
   }
   claimCover(id) {

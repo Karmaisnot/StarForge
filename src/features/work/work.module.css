@@ -491,6 +491,14 @@
   color: var(--sf-ink);
   font-size: 9px;
 }
+.dateGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dateGrid > label {
+  min-width: 0;
+}
 .cancelRequest {
   flex: 0 0 auto;
   padding: 5px 8px;
@@ -830,6 +838,161 @@
   gap: 7px;
   padding-top: 4px;
 }
+.meetingForm {
+  gap: 11px;
+}
+.meetingAudience {
+  padding: 12px;
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sf-surface) 96%, var(--sf-bg));
+}
+.meetingAudience > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.meetingAudience > header div {
+  display: grid;
+  gap: 2px;
+}
+.meetingAudience > header span {
+  color: var(--sf-primary);
+  font-family: var(--sf-font-mono);
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.meetingAudience > header strong {
+  color: var(--sf-ink);
+  font-size: 10px;
+}
+.meetingAudience > header b {
+  color: var(--sf-primary);
+  font-size: 8px;
+}
+.audienceModes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 9px;
+}
+.audienceModes > button {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--sf-border);
+  border-radius: 9px;
+  background: var(--sf-surface);
+  color: var(--sf-muted);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.audienceModes > button[data-on='1'] {
+  border-color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+  color: var(--sf-primary);
+}
+.audienceModes > button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+.audienceModes > button span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.audienceModes strong, .audienceModes small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audienceModes strong { color: var(--sf-ink); font-size: 8px; }
+.audienceModes small { color: var(--sf-muted); font-size: 6.5px; }
+.audienceSearch {
+  position: relative;
+  display: block;
+  margin-top: 8px;
+}
+.audienceSearch > svg {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: var(--sf-muted);
+}
+.form .audienceSearch input { padding-left: 31px; }
+.audienceOptions {
+  display: grid;
+  max-height: 188px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 7px;
+  overflow-y: auto;
+}
+.audienceOptions > button {
+  display: grid;
+  min-width: 0;
+  min-height: 45px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--sf-border);
+  border-radius: 9px;
+  background: var(--sf-surface);
+  color: var(--sf-muted);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.audienceOptions > button[data-on='1'] {
+  border-color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+  color: var(--sf-primary);
+}
+.audienceOptions > button > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--sf-surface-2);
+  color: var(--sf-primary);
+  font-size: 7px;
+  font-weight: 800;
+}
+.audienceOptions > button > div { display: grid; min-width: 0; gap: 2px; }
+.audienceOptions strong, .audienceOptions small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audienceOptions strong { color: var(--sf-ink); font-size: 8.5px; }
+.audienceOptions small { color: var(--sf-muted); font-size: 7px; }
+.audienceSummary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--sf-primary-soft);
+  color: var(--sf-primary);
+}
+.audienceSummary div { display: grid; gap: 2px; }
+.audienceSummary strong { color: var(--sf-ink); font-size: 9px; }
+.audienceSummary small { color: var(--sf-muted); font-size: 7.5px; }
+.audienceWarning {
+  margin: 7px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--sf-warn-soft);
+  color: var(--sf-warn);
+  font-size: 7.5px;
+  line-height: 1.4;
+}
 
 @media (max-width: 1120px) {
   .requestLayout,
@@ -896,6 +1059,9 @@
   }
   .coverList {
     grid-template-columns: 1fr;
+  }
+  .audienceModes {
+    grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 480px) {
@@ -967,6 +1133,12 @@
     width: 41px;
   }
   .kindGrid {
+    grid-template-columns: 1fr;
+  }
+  .dateGrid {
+    grid-template-columns: 1fr;
+  }
+  .audienceOptions {
     grid-template-columns: 1fr;
   }
 }

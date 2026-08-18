@@ -308,6 +308,10 @@ export class IWorkRepository {
   respondMeeting(_id, _response) {
     return ni('IWorkRepository.respondMeeting');
   }
+  /** @param {Record<string, unknown>} _input */
+  scheduleMeeting(_input) {
+    return ni('IWorkRepository.scheduleMeeting');
+  }
   /** @param {string|number} _id */
   claimCover(_id) {
     return ni('IWorkRepository.claimCover');

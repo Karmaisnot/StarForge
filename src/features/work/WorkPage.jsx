@@ -9,7 +9,8 @@ import { useToast } from '@/hooks/useToast.js';
 import styles from './work.module.css';
 
 const TABS = ['calendar', 'requests', 'meetings'];
-const REQUEST_KINDS = ['other', 'expense', 'procurement', 'loan'];
+const REQUEST_KINDS = ['absence', 'other', 'expense', 'procurement', 'loan'];
+const MEETING_AUDIENCE_MODES = ['people', 'departments', 'branches', 'organization'];
 
 export function WorkPage() {
   const { work } = useServices();
@@ -20,6 +21,7 @@ export function WorkPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [requestOpen, setRequestOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
   const pendingActions = useRef(new Set());
   const state = useAsync(() => work.getWorkspace(), [locale, revision]);
 
@@ -162,6 +164,7 @@ export function WorkPage() {
                 }
                 onClaim={(id) => run(() => work.claimCover(id), 'work.coverClaimed')}
                 onRequestCover={() => setCoverOpen(true)}
+                onSchedule={data.capabilities.scheduleMeetings ? () => setMeetingOpen(true) : null}
               />
             )}
 
@@ -183,6 +186,17 @@ export function WorkPage() {
               onSubmit={async (input) => {
                 const saved = await run(() => work.requestCover(input), 'work.coverRequested');
                 if (saved) setCoverOpen(false);
+              }}
+            />
+            <ScheduleMeetingModal
+              open={meetingOpen}
+              onClose={() => setMeetingOpen(false)}
+              audience={data.meetingAudience}
+              audienceComplete={data.meetingAudienceComplete}
+              t={t}
+              onSubmit={async (input) => {
+                const saved = await run(() => work.scheduleMeeting(input), 'work.meetingScheduled');
+                if (saved) setMeetingOpen(false);
               }}
             />
           </>
@@ -327,6 +341,7 @@ function RequestsView({ data, locale, t, onNew, onCancel }) {
                 <div className={styles.requestMeta}>
                   <span>{t(`work.kind.${request.kind}`)}</span>
                   <span>{formatDate(request.createdAt, locale)}</span>
+                  {request.kind === 'absence' && request.payload?.starts_on && <span>{formatDate(request.payload.starts_on, locale)}–{formatDate(request.payload.ends_on || request.payload.starts_on, locale)}</span>}
                   {request.amount != null && (
                     <strong className="sf-mono">{money(request.amount, locale)}</strong>
                   )}
@@ -368,7 +383,7 @@ function RequestsView({ data, locale, t, onNew, onCancel }) {
   );
 }
 
-function MeetingsView({ data, locale, t, onRespond, onClaim, onRequestCover }) {
+function MeetingsView({ data, locale, t, onRespond, onClaim, onRequestCover, onSchedule }) {
   return (
     <section className={styles.meetingLayout}>
       <div className={styles.meetingColumn}>
@@ -377,6 +392,7 @@ function MeetingsView({ data, locale, t, onRespond, onClaim, onRequestCover }) {
             <span>{t('work.invited')}</span>
             <h2>{t('work.upcomingMeetings')}</h2>
           </div>
+          {onSchedule && <button type="button" onClick={onSchedule}>{t('work.scheduleMeeting')}</button>}
         </header>
         <div className={styles.meetingList}>
           {data.meetings.map((meeting) => (
@@ -464,11 +480,68 @@ function MeetingsView({ data, locale, t, onRespond, onClaim, onRequestCover }) {
   );
 }
 
+function resolveAudience(mode, targets, people, branch) {
+  const selected = new Set(targets);
+  const scoped = branch ? people.filter((person) => person.branchIds.includes(String(branch))) : people;
+  if (mode === 'organization') return scoped;
+  if (mode === 'branches') return scoped.filter((person) => person.branchIds.some((id) => selected.has(id)));
+  if (mode === 'departments') return scoped.filter((person) => person.departmentIds.some((id) => selected.has(id)));
+  return scoped.filter((person) => selected.has(person.key));
+}
+
+function ScheduleMeetingModal({ open, onClose, onSubmit, audience, audienceComplete, t }) {
+  const people = audience?.people || [];
+  const branches = audience?.branches || [];
+  const departments = audience?.departments || [];
+  const [form, setForm] = useState({ title: '', agenda: '', location: '', startsAt: '', endsAt: '', branch: '', mode: 'people', targets: [], search: '' });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setForm({ title: '', agenda: '', location: '', startsAt: '', endsAt: '', branch: '', mode: 'people', targets: [], search: '' });
+    setSaving(false);
+  }, [open]);
+  const scopedPeople = form.branch ? people.filter((person) => person.branchIds.includes(String(form.branch))) : people;
+  const resolved = resolveAudience(form.mode, form.targets, people, form.branch);
+  const options = form.mode === 'people'
+    ? scopedPeople.map((person) => ({ id: person.key, name: person.name, detail: person.role }))
+    : form.mode === 'departments'
+      ? departments.map((item) => ({ ...item, count: scopedPeople.filter((person) => person.departmentIds.includes(String(item.id))).length })).filter((item) => item.count)
+      : form.mode === 'branches'
+        ? branches.map((item) => ({ ...item, count: scopedPeople.filter((person) => person.branchIds.includes(String(item.id))).length })).filter((item) => item.count)
+        : [];
+  const visible = options.filter((option) => `${option.name} ${option.detail || ''}`.toLowerCase().includes(form.search.trim().toLowerCase()));
+  const setStart = (value) => {
+    const start = new Date(value);
+    const suggested = Number.isNaN(start.getTime()) ? '' : localInputDate(new Date(start.getTime() + 60 * 60 * 1000));
+    setForm((current) => ({ ...current, startsAt: value, endsAt: current.endsAt || suggested }));
+  };
+  const toggle = (id) => setForm((current) => ({ ...current, targets: current.targets.includes(id) ? current.targets.filter((item) => item !== id) : [...current.targets, id] }));
+  const valid = form.title.trim() && form.startsAt && form.endsAt && new Date(form.endsAt) > new Date(form.startsAt) && resolved.length > 0 && resolved.length <= 200 && (form.mode === 'people' || audienceComplete);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!valid || saving) return;
+    setSaving(true);
+    await onSubmit({
+      title: form.title.trim(),
+      agenda: form.agenda.trim(),
+      location: form.location.trim(),
+      starts_at: new Date(form.startsAt).toISOString(),
+      ends_at: new Date(form.endsAt).toISOString(),
+      branch: form.branch ? Number(form.branch) : null,
+      invitees: resolved.map(({ kind, id }) => ({ kind, id })),
+    });
+    setSaving(false);
+  };
+  return <Modal open={open} onClose={onClose} title={t('work.scheduleMeeting')} size="wide"><form className={`${styles.form} ${styles.meetingForm}`} onSubmit={submit}><p className={styles.formIntro}>{t('work.scheduleMeetingIntro')}</p><label><span>{t('work.meetingTitle')}</span><input autoFocus required maxLength="200" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={t('work.meetingTitlePlaceholder')} /></label><div className={styles.dateGrid}><label><span>{t('work.starts')}</span><input required type="datetime-local" value={form.startsAt} onChange={(event) => setStart(event.target.value)} /></label><label><span>{t('work.ends')}</span><input required type="datetime-local" min={form.startsAt} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} /></label></div><div className={styles.dateGrid}><label><span>{t('work.meetingScope')}</span><select value={form.branch} onChange={(event) => setForm({ ...form, branch: event.target.value, targets: [] })}><option value="">{t('work.entireOrganization')}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label><span>{t('work.location')}</span><input maxLength="200" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder={t('work.locationPlaceholder')} /></label></div><label><span>{t('work.agenda')}</span><textarea rows="3" maxLength="20000" value={form.agenda} onChange={(event) => setForm({ ...form, agenda: event.target.value })} placeholder={t('work.agendaPlaceholder')} /></label><section className={styles.meetingAudience}><header><div><span>{t('work.audience')}</span><strong>{t('work.whoShouldAttend')}</strong></div><b>{resolved.length} {t('work.invitees')}</b></header><div className={styles.audienceModes}>{MEETING_AUDIENCE_MODES.map((mode) => <button key={mode} type="button" data-on={form.mode === mode ? '1' : '0'} disabled={mode !== 'people' && !audienceComplete} onClick={() => setForm({ ...form, mode, targets: [], search: '' })}><Icon name={mode === 'people' ? 'users' : mode === 'departments' ? 'folder' : mode === 'branches' ? 'globe' : 'brand'} size={16} /><span><strong>{t(`work.audienceMode.${mode}`)}</strong><small>{t(`work.audienceModeBody.${mode}`)}</small></span></button>)}</div>{form.mode === 'organization' ? <div className={styles.audienceSummary}><Icon name="brand" size={18} /><div><strong>{form.branch ? t('work.entireBranch') : t('work.entireOrganization')}</strong><small>{resolved.length} {t('work.colleaguesInvited')}</small></div></div> : <><label className={styles.audienceSearch}><Icon name="search" size={14} /><input value={form.search} onChange={(event) => setForm({ ...form, search: event.target.value })} placeholder={t('work.searchAudience')} /></label><div className={styles.audienceOptions}>{visible.map((option) => <button key={option.id} type="button" data-on={form.targets.includes(option.id) ? '1' : '0'} onClick={() => toggle(option.id)}><span>{option.name.slice(0, 2).toUpperCase()}</span><div><strong>{option.name}</strong><small>{option.detail || `${option.count} ${t('work.colleagues')}`}</small></div><Icon name={form.targets.includes(option.id) ? 'check' : 'plus'} size={14} /></button>)}</div></>}{!audienceComplete && <p className={styles.audienceWarning}>{t('work.incompleteAudience')}</p>}{resolved.length > 200 && <p className={styles.audienceWarning}>{t('work.audienceLimit')}</p>}</section><div className={styles.formActions}><Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" type="submit" disabled={!valid || saving}>{saving ? t('common.loading') : t('work.scheduleMeeting')}</Button></div></form></Modal>;
+}
+
 function RequestModal({ open, onClose, onSubmit, t }) {
   const [kind, setKind] = useState('other');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [startsOn, setStartsOn] = useState('');
+  const [endsOn, setEndsOn] = useState('');
   const [saving, setSaving] = useState(false);
   const needsAmount = ['expense', 'procurement', 'loan'].includes(kind);
   useEffect(() => {
@@ -477,17 +550,21 @@ function RequestModal({ open, onClose, onSubmit, t }) {
     setTitle('');
     setDescription('');
     setAmount('');
+    setStartsOn('');
+    setEndsOn('');
     setSaving(false);
   }, [open]);
+  const isAbsence = kind === 'absence';
   const submit = async (event) => {
     event.preventDefault();
-    if (!title.trim() || (needsAmount && !(Number(amount) > 0))) return;
+    if (!title.trim() || (needsAmount && !(Number(amount) > 0)) || (isAbsence && (!startsOn || !endsOn || endsOn < startsOn || !description.trim()))) return;
     setSaving(true);
     await onSubmit({
       kind,
       title: title.trim(),
       description: description.trim(),
       amount: amount ? Number(amount) : null,
+      payload: isAbsence ? { starts_on: startsOn, ends_on: endsOn, reason: description.trim() } : {},
     });
     setSaving(false);
   };
@@ -505,7 +582,9 @@ function RequestModal({ open, onClose, onSubmit, t }) {
             >
               <Icon
                 name={
-                  key === 'loan'
+                  key === 'absence'
+                    ? 'cal'
+                    : key === 'loan'
                     ? 'trend'
                     : key === 'expense'
                       ? 'doc'
@@ -532,13 +611,15 @@ function RequestModal({ open, onClose, onSubmit, t }) {
             required
           />
         </label>
+        {isAbsence && <div className={styles.dateGrid}><label><span>{t('work.absenceStarts')}</span><input type="date" value={startsOn} onChange={(event) => { setStartsOn(event.target.value); if (!endsOn || endsOn < event.target.value) setEndsOn(event.target.value); }} required /></label><label><span>{t('work.absenceEnds')}</span><input type="date" min={startsOn} value={endsOn} onChange={(event) => setEndsOn(event.target.value)} required /></label></div>}
         <label>
-          <span>{t('work.details')}</span>
+          <span>{isAbsence ? t('work.absenceReason') : t('work.details')}</span>
           <textarea
             rows={3}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder={t('work.detailsPlaceholder')}
+            placeholder={isAbsence ? t('work.absenceReasonPlaceholder') : t('work.detailsPlaceholder')}
+            required={isAbsence}
           />
         </label>
         {(needsAmount || amount) && (
@@ -547,8 +628,9 @@ function RequestModal({ open, onClose, onSubmit, t }) {
             <div className={styles.moneyInput}>
               <input
                 type="number"
-                min="1000"
-                step="1000"
+                min="0.01"
+                step="any"
+                inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 required={needsAmount}
@@ -677,6 +759,10 @@ function nextEvent(data) {
 
 function localeCode(locale) {
   return locale === 'uz' ? 'uz-UZ' : locale === 'ru' ? 'ru-RU' : 'en-US';
+}
+function localInputDate(value) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 function sameDay(a, b) {
   return (

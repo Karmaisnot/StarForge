@@ -15,6 +15,9 @@ export class WorkService {
   respondMeeting(id, response) {
     return this.workRepo.respondMeeting(id, response);
   }
+  scheduleMeeting(input) {
+    return this.workRepo.scheduleMeeting(input);
+  }
   claimCover(id) {
     return this.workRepo.claimCover(id);
   }

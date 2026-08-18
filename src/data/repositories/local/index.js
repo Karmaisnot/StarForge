@@ -290,6 +290,9 @@ export class LocalWorkRepository extends IWorkRepository {
   respondMeeting(id, response) {
     return httpClient.patch(`work/meetings/${segment(id)}/response`, { response });
   }
+  scheduleMeeting(input) {
+    return httpClient.post('work/meetings', input);
+  }
   claimCover(id) {
     return httpClient.post(`work/coverage/${segment(id)}/claim`, {});
   }

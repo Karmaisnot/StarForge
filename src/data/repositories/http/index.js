@@ -2316,9 +2316,10 @@ function mapWorkLesson(lesson, index = 0) {
 }
 
 function mapWorkMeeting(meeting, currentUserId) {
-  const attendee = asList(meeting.attendees).find(
+  const attendees = asList(meeting.attendees);
+  const attendee = attendees.find(
     (item) => String(item.user) === String(currentUserId),
-  );
+  ) || (attendees.length === 1 ? attendees[0] : null);
   return {
     id: String(meeting.id),
     title: meeting.title || '',
@@ -2334,13 +2335,51 @@ function mapWorkMeeting(meeting, currentUserId) {
 function mapWorkRequest(request) {
   return {
     id: String(request.id),
-    kind: request.kind || 'other',
+    kind: request.kind === 'leave_request' ? 'absence' : (request.kind || 'other'),
     title: request.title || '',
     description: request.description || '',
     amount: request.amount_uzs == null ? null : toNumber(request.amount_uzs),
     outstanding: request.outstanding_uzs == null ? null : toNumber(request.outstanding_uzs),
     status: request.status || 'pending',
+    payload: request.payload && typeof request.payload === 'object' ? request.payload : {},
+    decisionNote: request.decision_note || '',
     createdAt: request.created_at,
+  };
+}
+
+function mapMeetingAudience(contacts, staffRows, teacherRows, branchRows, departmentRows) {
+  const staffById = new Map(asList(staffRows).map((row) => [String(row.id), row]));
+  const teacherById = new Map(asList(teacherRows).map((row) => [String(row.id), row]));
+  const people = new Map();
+  asList(contacts).forEach((contact) => {
+    const kind = String(contact.principal_kind || '');
+    const id = contact.profile_id == null ? '' : String(contact.profile_id);
+    if (!['staff', 'teacher'].includes(kind) || !id) return;
+    const key = `${kind}:${id}`;
+    if (people.has(key)) return;
+    const row = kind === 'staff' ? staffById.get(id) : teacherById.get(id);
+    const memberships = kind === 'staff' ? asList(row?.role_memberships) : [];
+    const branchIds = kind === 'staff'
+      ? memberships.map((item) => item.branch)
+      : [row?.branch];
+    const departmentIds = kind === 'staff'
+      ? memberships.map((item) => item.department)
+      : [row?.department];
+    people.set(key, {
+      key,
+      kind,
+      id: Number(id),
+      name: contact.display_name || row?.full_name || `${kind} #${id}`,
+      role: contact.role_label || (kind === 'teacher' ? copy().teacher : 'Staff'),
+      branchIds: [...new Set(branchIds.filter(Boolean).map(String))],
+      departmentIds: [...new Set(departmentIds.filter(Boolean).map(String))],
+      scopeKnown: Boolean(row),
+    });
+  });
+  return {
+    people: [...people.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    branches: asList(branchRows).map((row) => ({ id: String(row.id), name: row.name })),
+    departments: asList(departmentRows).map((row) => ({ id: String(row.id), name: row.name })),
   };
 }
 
@@ -2368,8 +2407,11 @@ export class HttpWorkRepository extends IWorkRepository {
 
   async getWorkspace() {
     const { from, to } = workWindow();
-    const [me, schedule, meetings, requests, loans, covers, pool] = await Promise.all([
-      this.#me(),
+    const me = await this.#me();
+    const profile = mapTeacher(me);
+    const mayScheduleMeetings = canAccess(profile, 'meeting', 'write');
+    const unavailable = () => Promise.resolve({ available: false, data: [] });
+    const [schedule, meetings, requests, loans, covers, pool, contacts, branches, departments, staff, teachers] = await Promise.all([
       capability(() =>
         httpClient.get(
           `schedule/lessons/?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}&page_size=200`,
@@ -2380,6 +2422,11 @@ export class HttpWorkRepository extends IWorkRepository {
       capability(() => httpClient.get('loans/?page_size=100')),
       capability(() => httpClient.get('cover/?page_size=100')),
       capability(() => httpClient.get('cover/pool/?page_size=100')),
+      mayScheduleMeetings ? capability(() => httpClient.get('messaging/contacts/?page_size=100&category=staff')) : unavailable(),
+      mayScheduleMeetings ? capability(() => httpClient.get('org/branches/?page_size=100')) : unavailable(),
+      mayScheduleMeetings ? capability(() => httpClient.get('org/departments/?page_size=100')) : unavailable(),
+      mayScheduleMeetings ? capability(() => httpClient.get('org/staff/?page_size=100')) : unavailable(),
+      mayScheduleMeetings ? capability(() => httpClient.get('teachers/?page_size=100')) : unavailable(),
     ]);
     const lessons = asList(schedule.data).map(mapWorkLesson);
     const lessonsById = new Map(lessons.map((lesson) => [String(lesson.id), lesson]));
@@ -2395,14 +2442,22 @@ export class HttpWorkRepository extends IWorkRepository {
         mapWorkCover(cover, lessonsById),
       ]),
     );
+    const meetingAudience = mapMeetingAudience(
+      contacts.data,
+      staff.data,
+      teachers.data,
+      branches.data,
+      departments.data,
+    );
     return {
-      profile: mapTeacher(me),
+      profile,
       capabilities: {
         schedule: schedule.available,
         meetings: meetings.available,
         requests: requests.available,
         loans: loans.available,
         cover: covers.available || pool.available,
+        scheduleMeetings: mayScheduleMeetings && contacts.available,
       },
       lessons,
       meetings: asList(meetings.data).map((meeting) =>
@@ -2410,7 +2465,17 @@ export class HttpWorkRepository extends IWorkRepository {
       ),
       requests: [...requestMap.values()],
       coverage: [...coverMap.values()],
+      meetingAudience,
+      meetingAudienceComplete: contacts.available &&
+        asList(contacts.data).length < 100 &&
+        staff.available &&
+        teachers.available &&
+        meetingAudience.people.every((person) => person.scopeKnown),
     };
+  }
+
+  async scheduleMeeting(input) {
+    return mapWorkMeeting(await httpClient.post('meetings/', input), this.#currentUserId);
   }
 
   async createRequest(input) {
@@ -2425,11 +2490,11 @@ export class HttpWorkRepository extends IWorkRepository {
     }
     return mapWorkRequest(
       await httpClient.post('approvals/requests/', {
-        kind: input.kind,
+        kind: input.kind === 'absence' ? 'leave_request' : input.kind,
         title: input.title,
         description: input.description || '',
         amount_uzs: input.amount || null,
-        payload: {},
+        payload: input.payload || {},
       }),
     );
   }
