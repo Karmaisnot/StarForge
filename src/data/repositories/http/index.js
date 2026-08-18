@@ -707,9 +707,29 @@ function mapMessage(message, currentUserId) {
 function materialKind(contentType) {
   const value = String(contentType ?? '').toLowerCase();
   if (value.includes('pdf')) return 'pdf';
+  if (value.startsWith('image/')) return 'image';
   if (value.includes('video')) return 'video';
+  if (value.includes('audio')) return 'audio';
   if (value.includes('word') || value.includes('document') || value.includes('text')) return 'doc';
   return 'doc';
+}
+
+function detectedMaterialContentType(file) {
+  if (file?.type) return file.type;
+  const extension = String(file?.name || '').split('.').pop()?.toLowerCase();
+  return {
+    pdf: 'application/pdf',
+    mp4: 'video/mp4',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    webm: 'audio/webm',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  }[extension] || 'application/octet-stream';
 }
 
 function bytesLabel(value) {
@@ -721,9 +741,10 @@ function bytesLabel(value) {
 
 function mapMaterial(file) {
   const kind = materialKind(file.content_type);
-  const color = { pdf: 'var(--sf-danger)', video: 'var(--sf-primary)', doc: 'var(--sf-accent)' }[
+  const color = { pdf: 'var(--sf-danger)', image: 'var(--sf-success)', video: 'var(--sf-primary)', audio: 'var(--sf-warn)', doc: 'var(--sf-accent)' }[
     kind
   ];
+  const changedAt = new Date(file.updated_at || file.created_at || 0).getTime();
   return {
     id: String(file.id),
     title: file.title || `File #${file.id}`,
@@ -734,6 +755,10 @@ function mapMaterial(file) {
     date: formatDate(file.created_at, { day: '2-digit', month: 'short' }),
     aiSummary: false,
     status: file.status ?? 'pending',
+    checkDelayed: file.status === 'pending' && changedAt > 0 && Date.now() - changedAt > 90_000,
+    rejectReason: file.reject_reason || '',
+    contentType: file.content_type || 'application/octet-stream',
+    thumbnailUrl: file.thumbnail_url || '',
     downloadable: file.is_downloadable !== false,
     audience: file.submission_audience ?? '',
     destination: file.cohort_name || file.library_name || file.folder_name || '—',
@@ -2236,7 +2261,7 @@ export class HttpMaterialRepository extends IMaterialRepository {
       .replace(/[^A-Za-z0-9._-]+/g, '_')
       .replace(/^\.+/, '')
       .slice(0, 255) || `material_${Date.now()}`;
-    const contentType = input.file.type || 'application/octet-stream';
+    const contentType = detectedMaterialContentType(input.file);
     const uploads = [];
     for (const folder of input.target.folderIds) {
       const body = {
@@ -2269,6 +2294,16 @@ export class HttpMaterialRepository extends IMaterialRepository {
 
   async download(id) {
     return httpClient.get(`content/files/${id}/download-url/`);
+  }
+
+  async preview(id) {
+    return httpClient.get(`content/files/${id}/download-url/`);
+  }
+
+  async recheck(id) {
+    await httpClient.post(`content/files/${id}/confirm/`, {});
+    this.#filesRequest = null;
+    return mapMaterial(await httpClient.get(`content/files/${id}/`));
   }
 
   async remove(id) {

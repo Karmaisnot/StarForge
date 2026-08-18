@@ -22,6 +22,12 @@ export class MaterialService {
   download(id) {
     return this.materialRepo.download(id);
   }
+  preview(id) {
+    return this.materialRepo.preview(id);
+  }
+  recheck(id) {
+    return this.materialRepo.recheck(id);
+  }
   /** @param {string} id @returns {Promise<unknown>} */
   remove(id) {
     return this.materialRepo.remove(id);

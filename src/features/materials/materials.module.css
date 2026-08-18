@@ -56,7 +56,7 @@
 .libraryHead,
 .row {
   display: grid;
-  grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(180px, 1fr) 90px 76px;
+  grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(180px, 1fr) 90px 124px;
   gap: 14px;
   align-items: center;
   padding: 12px 16px;
@@ -87,6 +87,7 @@
   gap: 10px;
 }
 .fileCell > span,
+.fileNameButton,
 .activityCell { display: grid; }
 .fileCell strong,
 .destinationCell span {
@@ -110,6 +111,19 @@
   border-radius: 8px;
   color: #fffcf5;
 }
+.fileNameButton {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline-offset: 4px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.fileNameButton:hover:not(:disabled) strong { color: var(--sf-primary); }
+.fileNameButton:disabled { cursor: default; }
 .destinationCell {
   color: var(--sf-ink-2);
   font-size: 11.5px;
@@ -121,6 +135,12 @@
   gap: 4px;
   color: var(--sf-muted);
   font-size: 10px;
+}
+.fileProblem {
+  max-width: 240px;
+  color: var(--sf-danger);
+  font-size: 9.5px;
+  line-height: 1.4;
 }
 .activityCell strong { font-family: var(--sf-font-mono); font-size: 13px; }
 .actions { justify-content: flex-end; }
@@ -207,6 +227,96 @@
 .switchRow strong { font-size: 11.5px; }
 .switchRow small { color: var(--sf-muted); font-size: 10px; line-height: 1.4; }
 .switchRow input { width: 18px; height: 18px; accent-color: var(--sf-primary); }
+.previewMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.previewMeta span {
+  padding: 5px 8px;
+  border-radius: 7px;
+  color: var(--sf-muted);
+  background: var(--sf-surface-2);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.previewStage {
+  position: relative;
+  display: grid;
+  min-height: min(64dvh, 680px);
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sf-bg) 88%, var(--sf-ink));
+}
+.previewStage iframe,
+.previewStage img,
+.previewStage video {
+  width: 100%;
+  height: min(64dvh, 680px);
+  border: 0;
+}
+.previewStage img,
+.previewStage video { object-fit: contain; }
+.previewStage[data-loaded='false'] > :not(.previewLoading) { opacity: 0; }
+.previewLoading {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--sf-muted);
+  font-size: 11px;
+}
+.previewLoading span {
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--sf-border);
+  border-top-color: var(--sf-primary);
+  border-radius: 50%;
+  animation: previewSpin 700ms linear infinite;
+}
+.audioPreview {
+  display: grid;
+  width: min(520px, calc(100% - 40px));
+  justify-items: center;
+  gap: 15px;
+  padding: 30px;
+  border: 1px solid var(--sf-border);
+  border-radius: 14px;
+  color: var(--sf-primary);
+  background: var(--sf-surface);
+}
+.audioPreview strong { color: var(--sf-ink); }
+.audioPreview audio { width: 100%; }
+.previewFallback {
+  display: flex;
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 30px;
+  border: 1px solid var(--sf-border);
+  border-radius: 14px;
+  background: var(--sf-bg);
+}
+.previewFallback > span {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--sf-primary);
+  background: var(--sf-primary-soft);
+}
+.previewFallback div { max-width: 440px; }
+.previewFallback strong { color: var(--sf-ink); font-size: 14px; }
+.previewFallback p { margin: 6px 0 0; color: var(--sf-muted); font-size: 11px; line-height: 1.55; }
+@keyframes previewSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .previewLoading span { animation: none; } }
 @media (max-width: 960px) {
   .statGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar { align-items: stretch; flex-direction: column; }
@@ -220,4 +330,9 @@
 }
 @media (max-width: 560px) {
   .statGrid { grid-template-columns: 1fr; }
+  .previewStage,
+  .previewStage iframe,
+  .previewStage img,
+  .previewStage video { min-height: 58dvh; height: 58dvh; }
+  .previewFallback { min-height: 58dvh; align-items: flex-start; flex-direction: column; }
 }

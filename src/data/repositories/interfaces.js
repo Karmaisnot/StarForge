@@ -286,6 +286,14 @@ export class IMaterialRepository {
   download(_id) {
     return ni('IMaterialRepository.download');
   }
+  /** @param {string} _id @returns {Promise<{url:string}>} */
+  preview(_id) {
+    return ni('IMaterialRepository.preview');
+  }
+  /** Requeue a pending file safety check. */
+  recheck(_id) {
+    return ni('IMaterialRepository.recheck');
+  }
   /** @param {string} _id */
   remove(_id) {
     return ni('IMaterialRepository.remove');

@@ -750,6 +750,21 @@ export class MockMaterialRepository extends IMaterialRepository {
   download(id) {
     return respond({ id, url: '#mock-download' });
   }
+  preview(id) {
+    const material = this.#materials.find((item) => String(item.id) === String(id));
+    const title = typeof material?.title === 'string' ? material.title : 'Library file';
+    const preview = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#f7f1e5"/><rect x="90" y="80" width="1020" height="640" rx="28" fill="#fffdf7" stroke="#d9ccb8"/><text x="150" y="190" fill="#342c24" font-family="sans-serif" font-size="42" font-weight="700">${title.replace(/[<>&]/g, '')}</text><text x="150" y="250" fill="#76695d" font-family="sans-serif" font-size="24">Sample-only secure file preview</text></svg>`;
+    return respond({ id, url: URL.createObjectURL(new Blob([preview], { type: 'image/svg+xml' })) });
+  }
+  recheck(id) {
+    const material = this.#materials.find((item) => String(item.id) === String(id));
+    if (material) {
+      material.status = 'clean';
+      material.checkDelayed = false;
+      material.rejectReason = '';
+    }
+    return respond(material || { id, status: 'clean' });
+  }
   remove(id) {
     this.#materials = this.#materials.filter((material) => material.id !== id);
     return respond({ id, removed: true });

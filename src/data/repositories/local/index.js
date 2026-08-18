@@ -272,6 +272,12 @@ export class LocalMaterialRepository extends IMaterialRepository {
   download(id) {
     return httpClient.get(`materials/${segment(id)}/download`);
   }
+  preview(id) {
+    return this.download(id);
+  }
+  recheck(id) {
+    return httpClient.patch(`materials/${segment(id)}/recheck`, {});
+  }
   remove(id) {
     return httpClient.delete(`materials/${segment(id)}`);
   }
