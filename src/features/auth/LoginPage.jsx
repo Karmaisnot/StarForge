@@ -8,7 +8,7 @@ import {
 } from '@/data/http/authToken.js';
 import { isApiMode } from '@/data/http/apiConfig.js';
 import { Icons } from '@/ceo/components/Icons.jsx';
-import { SfStar } from '@/ceo/components/primitives.jsx';
+import { BrandLogo } from '@/ui/BrandLogo.jsx';
 import { useT } from '@/hooks/useT.js';
 import { useTheme } from '@/hooks/useTheme.js';
 import {
@@ -182,11 +182,8 @@ function LoginFrame({ children }) {
     <main className="sf-login">
       <section className="sf-login-story-panel" aria-label={i18n.t('auth.storyLabel')}>
         <div className="sf-login-brand">
-          <span className="sf-login-brand-mark">
-            <SfStar size={24} color="currentColor" />
-          </span>
-          <span>
-            <strong>StarForge EDU</strong>
+          <BrandLogo tone="reverse" />
+          <span className="sf-login-brand-copy">
             <small>{i18n.t('auth.brandLine')}</small>
           </span>
         </div>

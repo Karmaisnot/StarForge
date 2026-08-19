@@ -1,6 +1,7 @@
 // Design-system barrel — single import surface for UI primitives.
 export { Icon } from './icons/Icon.jsx';
 export { StarMark } from './icons/StarMark.jsx';
+export { BrandLogo } from './BrandLogo.jsx';
 export { ICONS, ICON_NAMES } from './icons/icons.jsx';
 export { Button } from './Button.jsx';
 export { Chip } from './Chip.jsx';

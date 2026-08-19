@@ -55,4 +55,7 @@ export const Palette = Object.freeze({
   MARVARID: 'marvarid',
   SAMARQAND: 'samarqand',
   DARYO: 'daryo',
+  OSMON: 'osmon',
+  UCHQUN: 'uchqun',
+  MEROS: 'meros',
 });

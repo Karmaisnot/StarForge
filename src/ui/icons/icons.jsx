@@ -199,7 +199,9 @@ export const ICONS = {
     ),
   },
   brand: {
-    children: <path d="M12 3 L14 9 L20 10 L15 14 L17 20 L12 17 L7 20 L9 14 L4 10 L10 9 Z" />,
+    children: (
+      <g fill="currentColor" stroke="none" transform="translate(1.6 2.26) scale(.04)"><path d="M 539 0.5 L 393.5 302 L 385.5 193 L 13 504.5 L 334 148.5 L 227.5 145 Z" /><path d="M 263 187.5 L 192.5 266 L 1 364.5 L 140.5 262 Z" /><path d="M 363.5 249 L 295 359.5 L 184.5 506 L 285 318.5 Z" /></g>
+    ),
   },
   shield: { children: <path d="M12 3 L20 6 V12 c0 5-4 8-8 9 c-4-1-8-4-8-9 V6 Z" /> },
   flag: { children: <path d="M5 21 V4 H15 L13 8 L15 12 H5" /> },

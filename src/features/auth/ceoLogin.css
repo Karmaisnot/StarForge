@@ -84,19 +84,6 @@
   animation: sf-login-rise 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.sf-login-brand-mark {
-  display: grid;
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
-  place-items: center;
-  border: 1px solid rgb(255 250 241 / 48%);
-  border-radius: 14px;
-  background: rgb(255 255 255 / 8%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 13%);
-  backdrop-filter: blur(12px);
-}
-
 .sf-login-brand > span:last-child {
   display: grid;
   gap: 3px;
@@ -966,13 +953,6 @@
       23px;
   }
 
-  .sf-login-brand-mark {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-    border-radius: 13px;
-  }
-
   .sf-login-brand small {
     display: none;
   }
@@ -1113,4 +1093,3 @@
     transition-duration: 0.01ms !important;
   }
 }
-

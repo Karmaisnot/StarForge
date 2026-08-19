@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@/ui';
-import { SfAvatar, SfStar } from '@/ceo/components/primitives.jsx';
+import { BrandLogo } from '@/ui/BrandLogo.jsx';
+import { SfAvatar } from '@/ceo/components/primitives.jsx';
 import { logout } from '@/data/http/authToken.js';
 import { DATA_SOURCE } from '@/data/http/apiConfig.js';
 import { useT } from '@/hooks/useT.js';
@@ -137,12 +138,7 @@ export function Sidebar({ teacher, badges = {}, open, onClose }) {
             onClose();
           }}
         >
-          <span aria-hidden="true">
-            <SfStar size={20} color="currentColor" />
-          </span>
-          <strong>
-            StarForge <small>EDU</small>
-          </strong>
+          <BrandLogo decorative />
         </button>
         <button
           ref={closeRef}

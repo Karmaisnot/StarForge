@@ -4,6 +4,7 @@ import '@fontsource-variable/manrope/wght.css';
 import '@/styles/tokens.css';
 import '@/styles/base.css';
 import '@/ceo/styles/foundation-v2.css';
+import '@/styles/brand.css';
 import { AppProviders } from '@/app/providers/AppProviders.jsx';
 import { App } from '@/app/App.jsx';
 import { isolatedDevelopmentUrl } from '@/lib/devOrigin.js';

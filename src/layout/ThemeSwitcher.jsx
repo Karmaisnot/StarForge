@@ -7,9 +7,12 @@ import styles from './ThemeSwitcher.module.css';
 
 const PALETTES = [
   { id: Palette.SAROY, label: 'Saroy · Terracotta', colors: ['#b85535', '#d89a2e', '#fbf6ec'] },
-  { id: Palette.MARVARID, label: 'Marvarid · Pearl', colors: ['#1f6b66', '#c4892f', '#f2f1ed'] },
-  { id: Palette.SAMARQAND, label: 'Samarqand · Indigo', colors: ['#2a3d8f', '#d8a22a', '#f4f1e8'] },
-  { id: Palette.DARYO, label: 'Daryo · Sage', colors: ['#4f6a3a', '#ba8c2c', '#f1efe6'] },
+  { id: Palette.MARVARID, label: 'Marvarid · Electric cyan', colors: ['#16d9e3', '#168bff', '#f2f1ed'] },
+  { id: Palette.SAMARQAND, label: 'Samarqand · Signal indigo', colors: ['#6558f5', '#e9a23b', '#f4f1e8'] },
+  { id: Palette.DARYO, label: 'Daryo · Growth emerald', colors: ['#15b981', '#e9a23b', '#f1efe6'] },
+  { id: Palette.OSMON, label: 'Osmon · Bright azure', colors: ['#168bff', '#16d9e3', '#eef6ff'] },
+  { id: Palette.UCHQUN, label: 'Uchqun · Forge amber', colors: ['#e9a23b', '#b85535', '#fff7e8'] },
+  { id: Palette.MEROS, label: 'Meros · Deep terracotta', colors: ['#913f2a', '#e9a23b', '#f9eee9'] },
 ];
 
 /** The palette/dark controls — reusable inline (e.g. in Settings). */

@@ -6,7 +6,7 @@ import {
   logout,
   subscribeToSession,
 } from '@/data/http/authToken.js';
-import { StarMark } from '@/ui';
+import { BrandLogo } from '@/ui/BrandLogo.jsx';
 import { useT } from '@/hooks/useT.js';
 import styles from './login.module.css';
 
@@ -65,12 +65,9 @@ export function PasswordChangePage() {
   return (
     <main className={styles.page}>
       <div className={styles.orbit} aria-hidden="true" />
-      <section className={styles.intro} aria-label="StarForge EDU">
-        <div className={styles.brand}>
-          <span className={styles.mark}>
-            <StarMark size={30} color="#fffcf5" />
-          </span>
-          <span>StarForge EDU</span>
+      <section className={styles.intro} aria-label="Starforge">
+        <div className={`${styles.brand} sf-password-brand`}>
+          <BrandLogo tone="reverse" />
         </div>
         <div className={styles.copy}>
           <p className={styles.eyebrow}>{t('auth.temporaryPasswordEyebrow')}</p>
